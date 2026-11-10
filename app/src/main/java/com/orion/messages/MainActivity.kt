@@ -39,6 +39,8 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -172,7 +174,11 @@ class MainActivity:ComponentActivity(){
 @Composable fun OrionApp(ctx:Context,tick:Int,refresh:()->Unit,setDefault:()->Unit,call:(String)->Unit,send:(String,String,Int?,(String)->Unit)->Unit){
     var page by remember{mutableStateOf("home")}
     var thread by remember{mutableStateOf<ThreadItem?>(null)}
-    var dark by remember{mutableStateOf(false)}
+    var themeMode by remember{mutableStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getString("theme_mode","system")?:"system")}
+    val systemDark=isSystemInDarkTheme()
+    val dark=themeMode=="dark" || (themeMode=="system" && systemDark)
+    var ownerName by remember{mutableStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getString("owner_name","")?:"")}
+    var ownerPhone by remember{mutableStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getString("owner_phone","")?:"")}
     var query by remember{mutableStateOf("")}
     var composeQuery by remember{mutableStateOf("")}
     var composeNotice by remember{mutableStateOf("")}
@@ -249,17 +255,17 @@ class MainActivity:ComponentActivity(){
                     val returning=targetState.page in setOf("home","settings","chat") &&
                         (initialState.page in setOf("chat","profile","about","compose","settings"))
                     if(returning) {
-                        (slideInHorizontally(initialOffsetX={-it/4},animationSpec=tween(260))+fadeIn(tween(220))) togetherWith
-                            (slideOutHorizontally(targetOffsetX={it},animationSpec=tween(240))+fadeOut(tween(160)))
+                        (slideInHorizontally(initialOffsetX={-it/5},animationSpec=tween(380,easing=FastOutSlowInEasing))+fadeIn(tween(320,easing=FastOutSlowInEasing))) togetherWith
+                            (slideOutHorizontally(targetOffsetX={it/5},animationSpec=tween(340,easing=FastOutSlowInEasing))+fadeOut(tween(260)))
                     } else {
-                        (slideInHorizontally(initialOffsetX={it},animationSpec=tween(260))+fadeIn(tween(220))) togetherWith
-                            (slideOutHorizontally(targetOffsetX={-it/4},animationSpec=tween(240))+fadeOut(tween(160)))
+                        (slideInHorizontally(initialOffsetX={it/5},animationSpec=tween(380,easing=FastOutSlowInEasing))+fadeIn(tween(320,easing=FastOutSlowInEasing))) togetherWith
+                            (slideOutHorizontally(targetOffsetX={-it/5},animationSpec=tween(340,easing=FastOutSlowInEasing))+fadeOut(tween(260)))
                     }
                 },label="orion-page"
             ){screen->
                 val screenMessages=remember(screen.thread?.address,tick){screen.thread?.address?.takeIf{it.isNotBlank()}?.let{readMessages(ctx,it)}?: emptyList()}
                 when {
-                    screen.page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,dark,{dark=it},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},setDefault,{page="about"})
+                    screen.page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,themeMode,{mode->themeMode=mode;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("theme_mode",mode).apply()},ownerName,{value->ownerName=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_name",value).apply()},ownerPhone,{value->ownerPhone=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_phone",value).apply()},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},setDefault,{page="about"})
                     screen.page=="about" -> AboutScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted)
                     screen.page=="profile" && screen.thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),screen.thread,contacts,ink,muted,surface,ctx,call,{page="chat"},{message->status=message})
                     screen.page=="compose" -> NewMessageScreen(Modifier.fillMaxSize().padding(pad),contacts,composeQuery,{composeQuery=it;composeNotice=""},{contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;draft="";page="chat";status=""},{raw->val cleaned=raw.trim();val digits=cleaned.filter{it.isDigit()};val found=contacts.firstOrNull{it.name.equals(cleaned,true)||it.number.filter{ch->ch.isDigit()}==digits}?:contacts.firstOrNull{it.name.startsWith(cleaned,true)};if(found!=null||digits.length in 7..15){val dest=found?.number?:cleaned;val label=found?.name?:dest;thread=ThreadItem(dest,"",0,label);number=dest;draft="";page="chat";status=""}else composeNotice="Aucun contact correspondant. Vérifie le nom ou saisis un numéro valide."},composeNotice,{composeNotice=it})
@@ -587,7 +593,7 @@ class MainActivity:ComponentActivity(){
     }
 }
 
-@Composable private fun SettingsScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,dark:Boolean,onDark:(Boolean)->Unit,sims:List<SimChoice>,selected:Int,onSim:(Int)->Unit,fontChoice:String,onFont:(String)->Unit,onDefault:()->Unit,onAbout:()->Unit){
+@Composable private fun SettingsScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,themeMode:String,onThemeMode:(String)->Unit,ownerName:String,onOwnerName:(String)->Unit,ownerPhone:String,onOwnerPhone:(String)->Unit,sims:List<SimChoice>,selected:Int,onSim:(Int)->Unit,fontChoice:String,onFont:(String)->Unit,onDefault:()->Unit,onAbout:()->Unit){
     var previewChoice by remember(fontChoice){mutableStateOf(fontChoice)}
     val choices=listOf("System","San Francisco","Roboto","Rounded","Handwritten","Elegant","Typewriter","Condensed","Lato","Pacifico","Dancing Script","Light","Bold")
     fun fontLabel(choice:String)=when(choice){"System"->"Police du système";"San Francisco"->"Style San Francisco (Inter)";"Handwritten"->"Manuscrite / stylo";"Elegant"->"Élégante";"Typewriter"->"Machine à écrire";"Pacifico"->"Manuscrite — Pacifico";"Dancing Script"->"Manuscrite — Dancing Script";else->choice}
@@ -609,7 +615,29 @@ class MainActivity:ComponentActivity(){
             }}
         }
         Spacer(Modifier.height(22.dp));SectionTitle("APPARENCE",muted)
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp),verticalAlignment=Alignment.CenterVertically){Text("Mode sombre",color=ink,modifier=Modifier.weight(1f));Switch(dark,onDark)}
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
+            Text("Thème de l’application",color=ink,fontWeight=FontWeight.SemiBold)
+            Text("Choisis si ORION suit Android ou utilise un thème fixe.",color=muted,fontSize=12.sp,modifier=Modifier.padding(top=4.dp,bottom=12.dp))
+            listOf("system" to "Suivre le système","light" to "Mode clair","dark" to "Mode sombre").forEach{(value,label)->
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp)).clickable{onThemeMode(value)}.padding(vertical=10.dp,horizontal=4.dp),verticalAlignment=Alignment.CenterVertically){Text(label,color=ink,modifier=Modifier.weight(1f));RadioButton(selected=themeMode==value,onClick={onThemeMode(value)},colors=RadioButtonDefaults.colors(selectedColor=iBlue))}
+            }
+        }
+        Spacer(Modifier.height(22.dp));SectionTitle("PROPRIÉTAIRE DE L’APPLICATION",muted)
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
+            Text("Informations du propriétaire",color=ink,fontWeight=FontWeight.SemiBold)
+            Text("Ces informations servent à identifier le propriétaire d’ORION sur cet appareil.",color=muted,fontSize=12.sp,modifier=Modifier.padding(top=4.dp,bottom=12.dp))
+            OutlinedTextField(value=ownerName,onValueChange=onOwnerName,modifier=Modifier.fillMaxWidth(),singleLine=true,label={Text("Nom du propriétaire")},placeholder={Text("Nom et prénom")},shape=RoundedCornerShape(13.dp))
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(value=ownerPhone,onValueChange=onOwnerPhone,modifier=Modifier.fillMaxWidth(),singleLine=true,label={Text("Téléphone du propriétaire")},placeholder={Text("+257 …")},shape=RoundedCornerShape(13.dp))
+        }
+        Spacer(Modifier.height(22.dp));SectionTitle("COMPTE GOOGLE ET SAUVEGARDE",muted)
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
+            Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.CloudSync,null,tint=iBlue,modifier=Modifier.size(26.dp));Spacer(Modifier.width(10.dp));Column(Modifier.weight(1f)){Text("Synchronisation Google",color=ink,fontWeight=FontWeight.SemiBold);Text("Connexion à configurer",color=muted,fontSize=12.sp)}}
+            Text("La connexion Google, la sauvegarde cloud et la restauration nécessitent les identifiants OAuth et le projet Firebase d’ORION. Aucun message ne sera envoyé vers le cloud avant ton autorisation.",color=muted,fontSize=12.sp,modifier=Modifier.padding(top=12.dp))
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.Backup,null,tint=muted);Spacer(Modifier.width(8.dp));Text("Sauvegarder et restaurer les SMS",color=muted,fontSize=13.sp)}
+            Text("Disponible après la configuration sécurisée du compte Google.",color=muted,fontSize=11.sp,modifier=Modifier.padding(start=32.dp,top=3.dp))
+        }
         Spacer(Modifier.height(22.dp));SectionTitle("POLICE D’ÉCRITURE",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
             Text("Choisis une police pour voir son aperçu immédiatement.",color=ink,fontWeight=FontWeight.SemiBold)

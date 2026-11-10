@@ -214,7 +214,7 @@ class MainActivity:ComponentActivity(){
                 when {
                     page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,dark,{dark=it},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},setDefault,{page="about"})
                     page=="about" -> AboutScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted)
-                    page=="profile" && thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),thread!!,contacts,ink,muted,surface,ctx,call,{message->status=message})
+                    page=="profile" && thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),thread!!,contacts,ink,muted,surface,ctx,call,{page="chat"},{message->status=message})
                     thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,conversations,contacts,query,{query=it},
                         {item->thread=item;number=item.address;page="chat";status=""},
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
@@ -435,7 +435,7 @@ class MainActivity:ComponentActivity(){
     }
 }
 
-@Composable private fun ProfileScreen(mod:Modifier,item:ThreadItem,contacts:List<ContactItem>,ink:Color,muted:Color,surface:Color,ctx:Context,call:(String)->Unit,onBlockResult:(String)->Unit){
+@Composable private fun ProfileScreen(mod:Modifier,item:ThreadItem,contacts:List<ContactItem>,ink:Color,muted:Color,surface:Color,ctx:Context,call:(String)->Unit,onMessage:()->Unit,onBlockResult:(String)->Unit){
     val number=item.address
     var blocked by remember(number){mutableStateOf(runCatching{BlockedNumberContract.canCurrentUserBlockNumbers(ctx) && BlockedNumberContract.isBlocked(ctx,number)}.getOrDefault(false))}
     val contact=contacts.firstOrNull{normalizePhone(it.number)==normalizePhone(number)}
@@ -448,7 +448,7 @@ class MainActivity:ComponentActivity(){
         Text(number,color=muted,fontSize=14.sp)
         Spacer(Modifier.height(22.dp))
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)){
-            ProfileAction("message",Icons.Default.Message,Modifier.weight(1f),surface,ink){}
+            ProfileAction("message",Icons.Default.Message,Modifier.weight(1f),surface,ink){onMessage()}
             ProfileAction("appeler",Icons.Default.Call,Modifier.weight(1f),surface,ink){call(number)}
         }
         Spacer(Modifier.height(10.dp))

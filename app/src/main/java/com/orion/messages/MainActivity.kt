@@ -29,6 +29,7 @@ import android.telephony.SubscriptionManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -187,6 +188,16 @@ class MainActivity:ComponentActivity(){
     val appWeight=when(fontChoice){"Light"->FontWeight.Light;"Bold"->FontWeight.Bold;else->FontWeight.Normal}
     val contacts=remember(tick){readContacts(ctx)}
     LaunchedEffect(sims){if(sims.none{it.id==sim})sim=sims.firstOrNull()?.id?:SubscriptionManager.INVALID_SUBSCRIPTION_ID}
+    BackHandler(enabled=page!="home" || thread!=null){
+        when {
+            page=="about" -> page="settings"
+            page=="profile" -> page="chat"
+            page=="compose" -> {page="home";composeQuery="";composeNotice=""}
+            page=="settings" -> page="home"
+            thread!=null -> {thread=null;page="home";status=""}
+            else -> page="home"
+        }
+    }
     val bg=if(dark)iDark else iLight
     val surface=if(dark)Color(0xFF1C1C1E) else Color.White
     val ink=if(dark)Color.White else Color(0xFF111114)

@@ -17,6 +17,19 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Download bundled fonts
+        run: |
+          mkdir -p app/src/main/res/font
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf' -o app/src/main/res/font/inter.ttf
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto%5Bwdth%2Cwght%5D.ttf' -o app/src/main/res/font/roboto.ttf
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/nunito/Nunito%5Bwght%5D.ttf' -o app/src/main/res/font/nunito.ttf
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/caveat/Caveat%5Bwght%5D.ttf' -o app/src/main/res/font/caveat.ttf
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf' -o app/src/main/res/font/playfair_display.ttf
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/sourcecodepro/SourceCodePro%5Bwght%5D.ttf' -o app/src/main/res/font/source_code_pro.ttf
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/Oswald%5Bwght%5D.ttf' -o app/src/main/res/font/oswald.ttf
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/lato/Lato%5Bwght%5D.ttf' -o app/src/main/res/font/lato.ttf
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/pacifico/Pacifico-Regular.ttf' -o app/src/main/res/font/pacifico.ttf
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/dancingscript/DancingScript%5Bwght%5D.ttf' -o app/src/main/res/font/dancing_script.ttf
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Upload APK

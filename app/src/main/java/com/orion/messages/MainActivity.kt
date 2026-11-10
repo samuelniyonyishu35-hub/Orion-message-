@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Telephony
+import android.provider.ContactsContract
 import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
 import android.widget.Toast
@@ -39,7 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 
 private val Blue = Color(0xFF087CFA)
-data class ThreadItem(val address:String,val body:String,val date:Long)
+data class ThreadItem(val address:String,val body:String,val date:Long,val displayName:String=address)
 data class SimChoice(val id:Int,val slot:Int,val label:String)
 
 class MainActivity:ComponentActivity(){
@@ -51,7 +52,7 @@ class MainActivity:ComponentActivity(){
         Toast.makeText(this,if(ok)"ORION est l'application SMS par défaut" else "Choix non confirmé",Toast.LENGTH_LONG).show()
     }
     override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState)
-        permissions.launch(arrayOf(Manifest.permission.READ_SMS,Manifest.permission.SEND_SMS,Manifest.permission.RECEIVE_SMS,Manifest.permission.READ_PHONE_STATE))
+        permissions.launch(arrayOf(Manifest.permission.READ_SMS,Manifest.permission.SEND_SMS,Manifest.permission.RECEIVE_SMS,Manifest.permission.READ_PHONE_STATE,Manifest.permission.READ_CONTACTS))
         setContent{OrionApp(this,tick,{tick++},::makeDefault,::send)}
     }
     private fun makeDefault(){
@@ -80,7 +81,7 @@ class MainActivity:ComponentActivity(){
     val ink=if(dark)Color.White else Color(0xFF17171A); val secondary=if(dark)Color(0xFF98989D) else Color(0xFF8E8E93)
     MaterialTheme(colorScheme=if(dark)darkColorScheme(primary=Blue,background=bg,surface=surface) else lightColorScheme(primary=Blue,background=bg,surface=surface)){
         Scaffold(containerColor=bg,topBar={TopAppBar(
-            title={Column{Text(if(page=="settings")"Réglages" else if(thread!=null)if(thread!!.address.isBlank())"Nouveau message" else thread!!.address else "Messages",fontSize=28.sp,fontWeight=FontWeight.Bold,color=ink,letterSpacing=(-.6).sp)
+            title={Column{Text(if(page=="settings")"Réglages" else if(thread!=null)if(thread!!.address.isBlank())"Nouveau message" else thread!!.displayName else "Messages",fontSize=28.sp,fontWeight=FontWeight.Bold,color=ink,letterSpacing=(-.6).sp)
                 if(page=="home"&&thread==null)Text("ORION",fontSize=10.sp,color=secondary,letterSpacing=2.sp)}},
             navigationIcon={if(page=="settings"||thread!=null)IconButton(onClick={if(thread!=null)thread=null else page="home"}){Icon(Icons.Default.ArrowBack,"Retour",tint=Blue)}},
             actions={if(page=="home"&&thread==null)IconButton(onClick={page="settings"}){Icon(Icons.Default.Settings,"Réglages",tint=Blue)}},
@@ -106,7 +107,7 @@ class MainActivity:ComponentActivity(){
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).background(if(surface==Color.White)Color(0xFFE5E5EA) else surface).padding(12.dp),verticalAlignment=Alignment.CenterVertically){
             Text("⌕",fontSize=22.sp,color=muted);Spacer(Modifier.width(8.dp))
-            BasicTextField(query,onQuery,Modifier.weight(1f),singleLine=true,textStyle=TextStyle(color=ink,fontSize=16.sp),decorationBox{inner->if(query.isEmpty())Text("Rechercher",color=muted);inner()})
+            TextField(value=query,onValueChange=onQuery,modifier=Modifier.weight(1f),singleLine=true,placeholder={Text("Rechercher")},textStyle=TextStyle(color=ink,fontSize=16.sp))
         }
         Spacer(Modifier.height(20.dp));Text("MESSAGES",fontSize=11.sp,fontWeight=FontWeight.Bold,color=muted,letterSpacing=1.4.sp)
         if(threads.isEmpty()){Column(Modifier.fillMaxWidth().padding(top=70.dp),horizontalAlignment=Alignment.CenterHorizontally){
@@ -116,7 +117,7 @@ class MainActivity:ComponentActivity(){
             items(threads.filter{query.isBlank()||it.address.contains(query,true)||it.body.contains(query,true)}){item->
                 Row(Modifier.fillMaxWidth().clickable{onOpen(item)}.padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
                     Box(Modifier.size(52.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Color(0xFF7BAAFF),Color(0xFF3769D8)))),contentAlignment=Alignment.Center){Text(item.address.takeLast(1).uppercase(),color=Color.White,fontSize=21.sp,fontWeight=FontWeight.Bold)}
-                    Spacer(Modifier.width(13.dp));Column(Modifier.weight(1f)){Text(item.address,color=ink,fontSize=16.sp,fontWeight=FontWeight.SemiBold);Spacer(Modifier.height(4.dp));Text(item.body,color=muted,fontSize=14.sp,maxLines=1)}
+                    Spacer(Modifier.width(13.dp));Column(Modifier.weight(1f)){Text(item.displayName,color=ink,fontSize=16.sp,fontWeight=FontWeight.SemiBold);Spacer(Modifier.height(4.dp));Text(item.body,color=muted,fontSize=14.sp,maxLines=1)}
                     Text("›",fontSize=25.sp,color=muted)
                 };HorizontalDivider(color=muted.copy(alpha=.2f),modifier=Modifier.padding(start=65.dp))
             }
@@ -127,7 +128,7 @@ class MainActivity:ComponentActivity(){
 @Composable private fun ChatScreen(mod:Modifier,item:ThreadItem,number:String,onNumber:(String)->Unit,draft:String,onDraft:(String)->Unit,status:String,ink:Color,muted:Color,surface:Color,onSend:()->Unit){
     Column(mod.padding(horizontal=12.dp)){
         if(item.address.isBlank()){Spacer(Modifier.height(10.dp));Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(14.dp),verticalAlignment=Alignment.CenterVertically){
-            Text("À :",color=muted);Spacer(Modifier.width(8.dp));BasicTextField(number,onNumber,Modifier.weight(1f),textStyle=TextStyle(color=ink,fontSize=16.sp),decorationBox{inner->if(number.isEmpty())Text("Numéro de téléphone",color=muted);inner()})
+            Text("À :",color=muted);Spacer(Modifier.width(8.dp));TextField(value=number,onValueChange=onNumber,modifier=Modifier.weight(1f),singleLine=true,placeholder={Text("Numéro de téléphone")},textStyle=TextStyle(color=ink,fontSize=16.sp))
         }}
         Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.BottomEnd){
             if(item.body.isNotBlank())Column(horizontalAlignment=Alignment.End){
@@ -141,7 +142,7 @@ class MainActivity:ComponentActivity(){
         if(status.isNotBlank())Text(status,color=muted,fontSize=11.sp,modifier=Modifier.padding(6.dp))
         Row(Modifier.fillMaxWidth().padding(vertical=9.dp),verticalAlignment=Alignment.Bottom){
             Box(Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(surface).padding(horizontal=16.dp,vertical=13.dp)){
-                BasicTextField(draft,onDraft,Modifier.fillMaxWidth(),textStyle=TextStyle(color=ink,fontSize=16.sp),decorationBox{inner->if(draft.isEmpty())Text("SMS · Message texte",color=muted);inner()})
+                TextField(value=draft,onValueChange=onDraft,modifier=Modifier.fillMaxWidth(),textStyle=TextStyle(color=ink,fontSize=16.sp),placeholder={Text("SMS · Message texte")})
             };Spacer(Modifier.width(8.dp));IconButton(onClick=onSend,modifier=Modifier.size(46.dp).clip(CircleShape).background(Blue)){Icon(Icons.Default.Send,"Envoyer",tint=Color.White)}
         }
     }
@@ -170,7 +171,7 @@ class MainActivity:ComponentActivity(){
         }
         Spacer(Modifier.height(22.dp));SectionTitle("CONFIDENTIALITÉ",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
-            Text("Accès aux contacts désactivé",color=ink,fontWeight=FontWeight.SemiBold)
+            Text("Noms de tes contacts",color=ink,fontWeight=FontWeight.SemiBold)
             Text("ORION ne demande pas l'autorisation Contacts et ne lit pas ton carnet d'adresses. Les conversations utilisent les numéros présents dans les SMS.",color=muted,fontSize=12.sp)
         }
     }
@@ -183,9 +184,19 @@ class MainActivity:ComponentActivity(){
 }
 private fun readThreads(ctx:Context):List<ThreadItem>{
     if(ContextCompat.checkSelfPermission(ctx,Manifest.permission.READ_SMS)!=PackageManager.PERMISSION_GRANTED)return emptyList()
+    val names=mutableMapOf<String,String>()
+    if(ContextCompat.checkSelfPermission(ctx,Manifest.permission.READ_CONTACTS)==PackageManager.PERMISSION_GRANTED){
+        try{ctx.contentResolver.query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI,arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER,ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME),null,null,null)?.use{cc->
+            val ni=cc.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER);val di=cc.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+            while(cc.moveToNext()){val n=if(ni>=0)cc.getString(ni) else null;val d=if(di>=0)cc.getString(di) else null
+                if(!n.isNullOrBlank()&&!d.isNullOrBlank())names[normalizePhone(n)]=d}
+        }}catch(_:Exception){}
+    }
     val out=mutableListOf<ThreadItem>()
     try{ctx.contentResolver.query(Telephony.Sms.CONTENT_URI,arrayOf(Telephony.Sms.ADDRESS,Telephony.Sms.BODY,Telephony.Sms.DATE),null,null,Telephony.Sms.DATE+" DESC")?.use{c->
         val ai=c.getColumnIndex(Telephony.Sms.ADDRESS);val bi=c.getColumnIndex(Telephony.Sms.BODY);val di=c.getColumnIndex(Telephony.Sms.DATE);val seen=mutableSetOf<String>()
-        while(c.moveToNext()&&out.size<100){val a=if(ai>=0)c.getString(ai)?:"Inconnu" else "Inconnu";if(seen.add(a))out.add(ThreadItem(a,if(bi>=0)c.getString(bi)?:"" else "",if(di>=0)c.getLong(di) else 0L))}
+        while(c.moveToNext()&&out.size<100){val a=if(ai>=0)c.getString(ai)?:"Inconnu" else "Inconnu";if(seen.add(a))out.add(ThreadItem(a,if(bi>=0)c.getString(bi)?:"",if(di>=0)c.getLong(di) else 0L,names[normalizePhone(a)]?:a))}
     }}catch(_:Exception){};return out
 }
+
+private fun normalizePhone(value:String):String = value.filter{it.isDigit()}

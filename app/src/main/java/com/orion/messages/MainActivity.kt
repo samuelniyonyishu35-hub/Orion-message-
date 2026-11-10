@@ -695,20 +695,20 @@ class MainActivity:ComponentActivity(){
                     Text(googleEmail ?: "Non connecté",color=muted,fontSize=12.sp)
                 }
             }
-            Text("Connecte ton compte Google à ORION. Cette connexion ne sauvegarde aucun SMS et n’active aucune synchronisation automatiquement.",color=muted,fontSize=12.sp,modifier=Modifier.padding(top=12.dp))
             Spacer(Modifier.height(12.dp))
             if(googleEmail==null){
-                Button(onClick=onGoogleSignIn,enabled=!googleBusy,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){
+                Button(onClick=onGoogleSignIn,enabled=!googleBusy,modifier=Modifier.fillMaxWidth().height(52.dp),shape=RoundedCornerShape(13.dp)){
                     if(googleBusy)CircularProgressIndicator(modifier=Modifier.size(18.dp),strokeWidth=2.dp,color=Color.White)
                     else Icon(Icons.Default.AccountCircle,null)
                     Spacer(Modifier.width(8.dp))
-                    Text(if(googleBusy)"Connexion en cours…" else "Se connecter avec Google")
+                    Text(if(googleBusy)"Connexion en cours…" else "Se connecter avec Google",fontWeight=FontWeight.SemiBold)
                 }
             }else{
-                OutlinedButton(onClick=onGoogleSignOut,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){
+                OutlinedButton(onClick=onGoogleSignOut,modifier=Modifier.fillMaxWidth().height(52.dp),shape=RoundedCornerShape(13.dp)){
                     Icon(Icons.Default.Logout,null);Spacer(Modifier.width(8.dp));Text("Déconnecter ce compte")
                 }
             }
+            Text("Connecte ton compte Google à ORION. Cette connexion ne sauvegarde aucun SMS et n’active aucune synchronisation automatiquement.",color=muted,fontSize=12.sp,modifier=Modifier.padding(top=12.dp))
             if(!googleMessage.isNullOrBlank())Text(googleMessage,color=if(googleEmail!=null)Color(0xFF34A853) else muted,fontSize=12.sp,modifier=Modifier.padding(top=9.dp))
             Spacer(Modifier.height(14.dp))
             HorizontalDivider(color=muted.copy(alpha=.2f))

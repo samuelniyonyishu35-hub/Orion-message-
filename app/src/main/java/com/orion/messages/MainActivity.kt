@@ -33,6 +33,12 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -43,6 +49,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -87,6 +95,7 @@ data class ThreadItem(val address:String,val body:String,val date:Long,val displ
 data class SmsRecord(val id:Long,val body:String,val date:Long,val type:Int,val status:Int)
 data class ContactItem(val name:String,val number:String)
 data class SimChoice(val id:Int,val slot:Int,val label:String)
+data class OrionScreen(val page:String,val thread:ThreadItem?)
 
 class MainActivity:ComponentActivity(){
     private var tick by mutableIntStateOf(0)
@@ -182,6 +191,7 @@ class MainActivity:ComponentActivity(){
     var sim by remember{mutableIntStateOf(SubscriptionManager.INVALID_SUBSCRIPTION_ID)}
     val sims=remember(tick){readSims(ctx)}
     val conversations=remember(tick){readThreads(ctx)}
+    val homeListState=rememberLazyListState()
     val messages=remember(tick,thread?.address){thread?.address?.takeIf{it.isNotBlank()}?.let{readMessages(ctx,it)}?: emptyList()}
     var fontChoice by remember{mutableStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getString("font","System")?:"System")}
     val appFont=fontFamilyForChoice(ctx,fontChoice)
@@ -225,7 +235,7 @@ class MainActivity:ComponentActivity(){
                         Column { Text(thread!!.displayName,fontSize=17.sp,fontWeight=FontWeight.SemiBold,color=ink,maxLines=1,overflow=TextOverflow.Ellipsis);Text("touchez pour afficher le profil",fontSize=11.sp,color=muted) }
                     }},
                     navigationIcon={IconButton(onClick={thread=null;page="home";status=""}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},
-                    actions={IconButton(onClick={call(thread!!.address.ifBlank{number})}){Icon(Icons.Default.Call,"Appeler",tint=iBlue)}},
+                    actions={IconButton(onClick={call(screen.thread!!.address.ifBlank{number})}){Icon(Icons.Default.Call,"Appeler",tint=iBlue)}},
                     colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
                 else -> TopAppBar(title={Column{Text("Messages",fontSize=30.sp,fontWeight=FontWeight.Bold,color=ink,letterSpacing=(-.8).sp);Text("ORION",fontSize=10.sp,color=muted,letterSpacing=2.sp)}},
                     navigationIcon={IconButton(onClick={page="settings"}){Icon(Icons.Default.MoreVert,"Ouvrir les réglages",tint=iBlue)}},
@@ -233,16 +243,30 @@ class MainActivity:ComponentActivity(){
             } }
         },floatingActionButton={if(page=="home"&&thread==null)FloatingActionButton(onClick={composeQuery="";composeNotice="";number="";draft="";thread=null;page="compose";status=""},containerColor=iBlue,contentColor=Color.White,shape=CircleShape){Icon(Icons.Default.Edit,"Nouveau message")}}
         ){pad->
-            AnimatedContent(targetState=page+if(thread!=null)"-thread" else "",label="orion-page"){screen->
+            AnimatedContent(
+                targetState=OrionScreen(page,thread),
+                transitionSpec={
+                    val returning=targetState.page in setOf("home","settings","chat") &&
+                        (initialState.page in setOf("chat","profile","about","compose","settings"))
+                    if(returning) {
+                        (slideInHorizontally(initialOffsetX={-it/4},animationSpec=tween(260))+fadeIn(tween(220))) togetherWith
+                            (slideOutHorizontally(targetOffsetX={it},animationSpec=tween(240))+fadeOut(tween(160)))
+                    } else {
+                        (slideInHorizontally(initialOffsetX={it},animationSpec=tween(260))+fadeIn(tween(220))) togetherWith
+                            (slideOutHorizontally(targetOffsetX={-it/4},animationSpec=tween(240))+fadeOut(tween(160)))
+                    }
+                },label="orion-page"
+            ){screen->
+                val screenMessages=remember(screen.thread?.address,tick){screen.thread?.address?.takeIf{it.isNotBlank()}?.let{readMessages(ctx,it)}?: emptyList()}
                 when {
-                    page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,dark,{dark=it},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},setDefault,{page="about"})
-                    page=="about" -> AboutScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted)
-                    page=="profile" && thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),thread!!,contacts,ink,muted,surface,ctx,call,{page="chat"},{message->status=message})
-                    page=="compose" -> NewMessageScreen(Modifier.fillMaxSize().padding(pad),contacts,composeQuery,{composeQuery=it;composeNotice=""},{contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;draft="";page="chat";status=""},{raw->val cleaned=raw.trim();val digits=cleaned.filter{it.isDigit()};val found=contacts.firstOrNull{it.name.equals(cleaned,true)||it.number.filter{ch->ch.isDigit()}==digits}?:contacts.firstOrNull{it.name.startsWith(cleaned,true)};if(found!=null||digits.length in 7..15){val dest=found?.number?:cleaned;val label=found?.name?:dest;thread=ThreadItem(dest,"",0,label);number=dest;draft="";page="chat";status=""}else composeNotice="Aucun contact correspondant. Vérifie le nom ou saisis un numéro valide."},composeNotice,{composeNotice=it})
-                    thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,conversations,contacts,query,{query=it},
+                    screen.page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,dark,{dark=it},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},setDefault,{page="about"})
+                    screen.page=="about" -> AboutScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted)
+                    screen.page=="profile" && screen.thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),screen.thread,contacts,ink,muted,surface,ctx,call,{page="chat"},{message->status=message})
+                    screen.page=="compose" -> NewMessageScreen(Modifier.fillMaxSize().padding(pad),contacts,composeQuery,{composeQuery=it;composeNotice=""},{contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;draft="";page="chat";status=""},{raw->val cleaned=raw.trim();val digits=cleaned.filter{it.isDigit()};val found=contacts.firstOrNull{it.name.equals(cleaned,true)||it.number.filter{ch->ch.isDigit()}==digits}?:contacts.firstOrNull{it.name.startsWith(cleaned,true)};if(found!=null||digits.length in 7..15){val dest=found?.number?:cleaned;val label=found?.name?:dest;thread=ThreadItem(dest,"",0,label);number=dest;draft="";page="chat";status=""}else composeNotice="Aucun contact correspondant. Vérifie le nom ou saisis un numéro valide."},composeNotice,{composeNotice=it})
+                    screen.thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,conversations,contacts,query,{query=it},homeListState,
                         {item->thread=item;number=item.address;page="chat";status=""},
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
-                    else -> ChatScreen(Modifier.fillMaxSize().padding(pad).imePadding(),thread!!,messages,appFont,appWeight,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
+                    else -> ChatScreen(Modifier.fillMaxSize().padding(pad).imePadding(),screen.thread,screenMessages,appFont,appWeight,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
                         {photoPicker.launch("image/*")},{cameraPicker.launch(null)},{photoUri=null},{uri->
                             val dest=thread!!.address.ifBlank{number}.trim()
                             if(dest.isBlank())status="Saisis le numéro du destinataire avant de joindre une photo."
@@ -266,7 +290,7 @@ class MainActivity:ComponentActivity(){
                             if(photoUri!=null)status="Utilise le bouton Envoyer pour joindre la photo."
                             else if(dest.isBlank())status="Saisis le numéro du destinataire."
                             else if(draft.isBlank())status="Écris un message."
-                            else {val sentBody=draft.trim();send(dest,sentBody,sim.takeIf{it!=SubscriptionManager.INVALID_SUBSCRIPTION_ID}){result->status=result;if(result.startsWith("Message envoyé")){draft="";thread=ThreadItem(dest,sentBody,System.currentTimeMillis(),thread!!.displayName);refresh()}}}
+                            else {val sentBody=draft.trim();send(dest,sentBody,sim.takeIf{it!=SubscriptionManager.INVALID_SUBSCRIPTION_ID}){result->status=result;if(result.startsWith("Message envoyé")){draft="";thread=ThreadItem(dest,sentBody,System.currentTimeMillis(),screen.thread!!.displayName);refresh()}}}
                         })
                 }
             }
@@ -282,7 +306,7 @@ class MainActivity:ComponentActivity(){
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-@Composable private fun HomeScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,threads:List<ThreadItem>,contacts:List<ContactItem>,query:String,onQuery:(String)->Unit,onOpen:(ThreadItem)->Unit,onContact:(ContactItem)->Unit){
+@Composable private fun HomeScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,threads:List<ThreadItem>,contacts:List<ContactItem>,query:String,onQuery:(String)->Unit,listState:LazyListState,onOpen:(ThreadItem)->Unit,onContact:(ContactItem)->Unit){
     var selectedThreads by remember{mutableStateOf(setOf<String>())}
     val normalizedQuery=query.filter{it.isDigit()}
     val matchingThreads=threads.filter{
@@ -331,7 +355,7 @@ class MainActivity:ComponentActivity(){
                 Spacer(Modifier.height(14.dp));Text(if(query.isBlank())"Aucun message" else "Aucun résultat",fontWeight=FontWeight.SemiBold,color=ink,fontSize=18.sp)
                 Text(if(query.isBlank())"Touchez le bouton pour commencer." else "Essaie un autre nom ou numéro.",color=muted,fontSize=13.sp)
             }
-        }else LazyColumn(contentPadding=PaddingValues(bottom=100.dp)){
+        }else LazyColumn(state=listState,contentPadding=PaddingValues(bottom=100.dp)){
             items(matchingThreads){item->
                 Row(Modifier.fillMaxWidth().combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}).background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
                     if(selectedThreads.contains(item.address))Icon(Icons.Default.CheckCircle,null,tint=iBlue,modifier=Modifier.size(50.dp).padding(12.dp)) else Avatar(item.displayName,50)

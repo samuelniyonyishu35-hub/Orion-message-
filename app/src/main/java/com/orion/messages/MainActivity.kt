@@ -15,6 +15,9 @@ import android.os.Bundle
 import android.provider.Telephony
 import android.provider.ContactsContract
 import android.provider.BlockedNumberContract
+import android.provider.MediaStore
+import android.media.MediaRecorder
+import java.io.File
 import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
 import android.widget.Toast
@@ -83,19 +86,20 @@ class MainActivity:ComponentActivity(){
         Toast.makeText(this,if(ok)"ORION est l'application SMS par défaut" else "Choix non confirmé",Toast.LENGTH_LONG).show()
     }
     override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState)
-        enableOrionImmersiveMode()
+        showSystemBars()
         permissions.launch(arrayOf(Manifest.permission.READ_SMS,Manifest.permission.SEND_SMS,Manifest.permission.RECEIVE_SMS,Manifest.permission.READ_PHONE_STATE,Manifest.permission.READ_CONTACTS))
         setContent{OrionApp(this,tick,{tick++},::makeDefault,::call,::send)}
     }
     override fun onWindowFocusChanged(hasFocus:Boolean){
         super.onWindowFocusChanged(hasFocus)
-        if(hasFocus) enableOrionImmersiveMode()
+        if(hasFocus) showSystemBars()
     }
-    private fun enableOrionImmersiveMode(){
-        WindowCompat.setDecorFitsSystemWindows(window,false)
+    private fun showSystemBars(){
+        WindowCompat.setDecorFitsSystemWindows(window,true)
         val controller=WindowInsetsControllerCompat(window,window.decorView)
-        controller.hide(WindowInsetsCompat.Type.systemBars())
-        controller.systemBarsBehavior=WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
+        controller.isAppearanceLightStatusBars=true
+        controller.isAppearanceLightNavigationBars=true
     }
     private fun makeDefault(){
         try{if(Build.VERSION.SDK_INT>=29){val r=getSystemService(RoleManager::class.java)
@@ -130,6 +134,10 @@ class MainActivity:ComponentActivity(){
     var draft by remember{mutableStateOf("")}
     var photoUri by remember{mutableStateOf<Uri?>(null)}
     val photoPicker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->photoUri=uri}
+    val cameraPicker=rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()){bitmap->
+        if(bitmap!=null){val saved=runCatching{MediaStore.Images.Media.insertImage(ctx.contentResolver,bitmap,"ORION photo","Photo prise avec ORION")}.getOrNull();photoUri=saved?.let{Uri.parse(it)}}
+    }
+    var attachMenu by remember{mutableStateOf(false)}
     val photoPreview=remember(photoUri){photoUri?.let{uri->runCatching{ctx.contentResolver.openInputStream(uri)?.use{stream->BitmapFactory.decodeStream(stream)?.asImageBitmap()}}.getOrNull()}}
     var status by remember{mutableStateOf("")}
     var selectedContact by remember{mutableStateOf<ContactItem?>(null)}
@@ -168,14 +176,7 @@ class MainActivity:ComponentActivity(){
                     actions={IconButton(onClick={call(thread!!.address.ifBlank{number})}){Icon(Icons.Default.Call,"Appeler",tint=iBlue)}},
                     colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
                 else -> TopAppBar(title={Column{Text("Messages",fontSize=30.sp,fontWeight=FontWeight.Bold,color=ink,letterSpacing=(-.8).sp);Text("ORION",fontSize=10.sp,color=muted,letterSpacing=2.sp)}},
-                    actions={
-                        Box{
-                            IconButton(onClick={overflowExpanded=true}){Icon(Icons.Default.MoreVert,"Menu",tint=iBlue)}
-                            DropdownMenu(expanded=overflowExpanded,onDismissRequest={overflowExpanded=false}){
-                                DropdownMenuItem(text={Text("Réglages")},leadingIcon={Icon(Icons.Default.Settings,null)},onClick={overflowExpanded=false;page="settings"})
-                            }
-                        }
-                    },
+                    navigationIcon={IconButton(onClick={page="settings"}){Icon(Icons.Default.MoreVert,"Ouvrir les réglages",tint=iBlue)}},
                     colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
             } }
         },floatingActionButton={if(page=="home"&&thread==null)FloatingActionButton(onClick={number="";draft="";thread=ThreadItem("","",0,"Nouveau message");page="chat";status=""},containerColor=iBlue,contentColor=Color.White,shape=CircleShape){Icon(Icons.Default.Edit,"Nouveau message")}}
@@ -189,7 +190,7 @@ class MainActivity:ComponentActivity(){
                         {item->thread=item;number=item.address;page="chat";status=""},
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
                     else -> ChatScreen(Modifier.fillMaxSize().padding(pad),thread!!,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
-                        {photoPicker.launch("image/*")},{photoUri=null},{uri->
+                        {attachMenu=true},{photoUri=null},{uri->
                             val dest=thread!!.address.ifBlank{number}.trim()
                             if(dest.isBlank())status="Saisis le numéro du destinataire avant de joindre une photo."
                             else try{
@@ -318,7 +319,13 @@ class MainActivity:ComponentActivity(){
         if(status.isNotBlank())Text(status,color=muted,fontSize=11.sp,modifier=Modifier.padding(horizontal=5.dp,vertical=5.dp))
         HorizontalDivider(color=muted.copy(alpha=.25f))
         Row(Modifier.fillMaxWidth().padding(top=10.dp,bottom=8.dp),verticalAlignment=Alignment.Bottom){
-            IconButton(onClick=onPickPhoto,modifier=Modifier.size(44.dp).clip(CircleShape).background(surface)){Icon(Icons.Default.AddPhotoAlternate,"Joindre une photo",tint=iBlue,modifier=Modifier.size(23.dp))}
+            Box {
+                IconButton(onClick=onPickPhoto,modifier=Modifier.size(44.dp).clip(CircleShape).background(surface)){Icon(Icons.Default.AddPhotoAlternate,"Joindre une photo",tint=iBlue,modifier=Modifier.size(23.dp))}
+                DropdownMenu(expanded=attachMenu,onDismissRequest={attachMenu=false}){
+                    DropdownMenuItem(text={Text("Prendre une photo")},leadingIcon={Icon(Icons.Default.CameraAlt,null)},onClick={attachMenu=false;cameraPicker.launch(null)})
+                    DropdownMenuItem(text={Text("Choisir dans la galerie")},leadingIcon={Icon(Icons.Default.PhotoLibrary,null)},onClick={attachMenu=false;photoPicker.launch("image/*")})
+                }
+            }
             Spacer(Modifier.width(7.dp))
             Row(Modifier.weight(1f).clip(RoundedCornerShape(23.dp)).background(surface).padding(start=15.dp,end=6.dp,top=5.dp,bottom=5.dp),verticalAlignment=Alignment.CenterVertically){
                 BasicTextField(value=draft,onValueChange=onDraft,modifier=Modifier.weight(1f).heightIn(min=36.dp,max=112.dp).padding(vertical=7.dp),textStyle=TextStyle(color=ink,fontSize=16.sp,lineHeight=21.sp),decorationBox={inner->if(draft.isEmpty())Text("SMS · Message texte",color=muted,fontSize=15.sp);inner()})

@@ -236,7 +236,7 @@ class MainActivity:ComponentActivity(){
                             if(photoUri!=null)status="Utilise le bouton Envoyer pour joindre la photo."
                             else if(dest.isBlank())status="Saisis le numéro du destinataire."
                             else if(draft.isBlank())status="Écris un message."
-                            else send(dest,draft.trim(),sim.takeIf{it!=SubscriptionManager.INVALID_SUBSCRIPTION_ID}){result->status=result;if(result.startsWith("Message envoyé")){draft="";thread=ThreadItem(dest,draft,System.currentTimeMillis(),thread!!.displayName);refresh()}}
+                            else {val sentBody=draft.trim();send(dest,sentBody,sim.takeIf{it!=SubscriptionManager.INVALID_SUBSCRIPTION_ID}){result->status=result;if(result.startsWith("Message envoyé")){draft="";thread=ThreadItem(dest,sentBody,System.currentTimeMillis(),thread!!.displayName);refresh()}}}
                         })
                 }
             }

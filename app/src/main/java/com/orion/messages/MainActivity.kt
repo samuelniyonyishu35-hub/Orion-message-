@@ -575,7 +575,7 @@ class MainActivity:ComponentActivity(){
             Text("Aperçu : Aa Bonjour ! 012345",color=ink,fontSize=21.sp,fontFamily=fontFamilyForChoice(ctx,fontChoice),modifier=Modifier.padding(vertical=12.dp))
             val choices=listOf("System","San Francisco","Roboto","Rounded","Handwritten","Elegant","Typewriter","Condensed","Lato","Pacifico","Dancing Script","Light","Bold")
             choices.forEach{choice->Row(Modifier.fillMaxWidth().clickable{onFont(choice)}.padding(vertical=10.dp),verticalAlignment=Alignment.CenterVertically){
-                Column(Modifier.weight(1f)){Text(when(choice){"System"->"Police du système";"Handwritten"->"Manuscrite / stylo";"Elegant"->"Élégante";"Typewriter"->"Machine à écrire";"Pacifico"->"Manuscrite — Pacifico";"Dancing Script"->"Manuscrite — Dancing Script";"Lato"->"Lato";else->choice},color=ink,fontFamily=fontFamilyForChoice(ctx,choice),fontWeight=if(choice=="Bold")FontWeight.Bold else FontWeight.Normal);Text("Aa Bonjour ! 012345",color=muted,fontSize=12.sp,fontFamily=fontFamilyForChoice(choice))}
+                Column(Modifier.weight(1f)){Text(when(choice){"System"->"Police du système";"Handwritten"->"Manuscrite / stylo";"Elegant"->"Élégante";"Typewriter"->"Machine à écrire";"Pacifico"->"Manuscrite — Pacifico";"Dancing Script"->"Manuscrite — Dancing Script";"Lato"->"Lato";else->choice},color=ink,fontFamily=fontFamilyForChoice(ctx,choice),fontWeight=if(choice=="Bold")FontWeight.Bold else FontWeight.Normal);Text("Aa Bonjour ! 012345",color=muted,fontSize=12.sp,fontFamily=fontFamilyForChoice(ctx,choice))}
                 if(fontChoice==choice)Icon(Icons.Default.Check,null,tint=iBlue)
             }}
         }

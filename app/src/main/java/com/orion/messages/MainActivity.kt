@@ -18,6 +18,8 @@ import android.provider.BlockedNumberContract
 import android.provider.MediaStore
 import android.media.MediaRecorder
 import android.content.ContentValues
+import android.app.PendingIntent
+import android.app.Activity
 import androidx.compose.ui.platform.LocalContext
 import java.io.File
 import android.telephony.SmsManager
@@ -55,6 +57,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,6 +72,7 @@ private val iLight = Color(0xFFF2F2F7)
 private val iDark = Color(0xFF000000)
 
 data class ThreadItem(val address:String,val body:String,val date:Long,val displayName:String=address)
+data class SmsRecord(val id:Long,val body:String,val date:Long,val type:Int,val status:Int)
 data class ContactItem(val name:String,val number:String)
 data class SimChoice(val id:Int,val slot:Int,val label:String)
 
@@ -120,9 +124,23 @@ class MainActivity:ComponentActivity(){
     }
     private fun send(to:String,body:String,sim:Int?,done:(String)->Unit){
         if(ContextCompat.checkSelfPermission(this,Manifest.permission.SEND_SMS)!=PackageManager.PERMISSION_GRANTED){permissions.launch(arrayOf(Manifest.permission.SEND_SMS));done("Autorise l'envoi SMS puis réessaie.");return}
-        try{val sms=if(Build.VERSION.SDK_INT>=31){val base=getSystemService(SmsManager::class.java);if(sim!=null)base.createForSubscriptionId(sim) else base}else{@Suppress("DEPRECATION") if(sim!=null)SmsManager.getSmsManagerForSubscriptionId(sim) else SmsManager.getDefault()}
-            sms.sendTextMessage(to,null,body,null,null);done("SMS transmis au service Android. Livraison selon le réseau.")
-        }catch(e:Exception){done("Échec : ${e.localizedMessage ?: "vérifie la SIM et le réseau"}")}
+        try{
+            val values=ContentValues().apply{
+                put(Telephony.Sms.ADDRESS,to);put(Telephony.Sms.BODY,body);put(Telephony.Sms.DATE,System.currentTimeMillis())
+                put(Telephony.Sms.DATE_SENT,System.currentTimeMillis());put(Telephony.Sms.READ,1);put(Telephony.Sms.SEEN,1)
+                put(Telephony.Sms.TYPE,Telephony.Sms.MESSAGE_TYPE_OUTBOX);put(Telephony.Sms.STATUS,Telephony.Sms.STATUS_PENDING)
+                if(sim!=null&&Build.VERSION.SDK_INT>=22)put(Telephony.Sms.SUBSCRIPTION_ID,sim)
+            }
+            val savedUri=contentResolver.insert(Telephony.Sms.Sent.CONTENT_URI,values) ?: throw IllegalStateException("ORION doit être l’application SMS par défaut pour enregistrer les messages.")
+            val request=(System.currentTimeMillis()%Int.MAX_VALUE).toInt()
+            val sentIntent=Intent(this,SmsStatusReceiver::class.java).setAction(SmsStatusReceiver.ACTION_SENT).putExtra(SmsStatusReceiver.EXTRA_URI,savedUri.toString())
+            val deliveredIntent=Intent(this,SmsStatusReceiver::class.java).setAction(SmsStatusReceiver.ACTION_DELIVERED).putExtra(SmsStatusReceiver.EXTRA_URI,savedUri.toString())
+            val sent=PendingIntent.getBroadcast(this,request,sentIntent,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            val delivered=PendingIntent.getBroadcast(this,request+1,deliveredIntent,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            val sms=if(Build.VERSION.SDK_INT>=31){val base=getSystemService(SmsManager::class.java);if(sim!=null)base.createForSubscriptionId(sim) else base}else{@Suppress("DEPRECATION") if(sim!=null)SmsManager.getSmsManagerForSubscriptionId(sim) else SmsManager.getDefault()}
+            sms.sendTextMessage(to,null,body,sent,delivered)
+            done("Message envoyé : ${body}")
+        }catch(e:Exception){done("Échec : ${e.localizedMessage ?: "vérifie la SIM, le réseau et l’application SMS par défaut"}")}
     }
 }
 
@@ -147,6 +165,9 @@ class MainActivity:ComponentActivity(){
     var sim by remember{mutableIntStateOf(SubscriptionManager.INVALID_SUBSCRIPTION_ID)}
     val sims=remember(tick){readSims(ctx)}
     val conversations=remember(tick){readThreads(ctx)}
+    val messages=remember(tick,thread?.address){thread?.address?.takeIf{it.isNotBlank()}?.let{readMessages(ctx,it)}?: emptyList()}
+    var fontChoice by remember{mutableStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getString("font","Sans")?:"Sans")}
+    val appFont=when(fontChoice){"Serif"->FontFamily.Serif;"Monospace"->FontFamily.Monospace;else->FontFamily.SansSerif}
     val contacts=remember(tick){readContacts(ctx)}
     LaunchedEffect(sims){if(sims.none{it.id==sim})sim=sims.firstOrNull()?.id?:SubscriptionManager.INVALID_SUBSCRIPTION_ID}
     val bg=if(dark)iDark else iLight
@@ -162,7 +183,7 @@ class MainActivity:ComponentActivity(){
             bars.isAppearanceLightNavigationBars=!dark
         }
     }
-    MaterialTheme(colorScheme=if(dark)darkColorScheme(primary=iBlue,background=bg,surface=surface) else lightColorScheme(primary=iBlue,background=bg,surface=surface)){
+    MaterialTheme(colorScheme=if(dark)darkColorScheme(primary=iBlue,background=bg,surface=surface) else lightColorScheme(primary=iBlue,background=bg,surface=surface),typography=Typography().copy(bodyLarge=Typography().bodyLarge.copy(fontFamily=appFont),bodyMedium=Typography().bodyMedium.copy(fontFamily=appFont),bodySmall=Typography().bodySmall.copy(fontFamily=appFont),titleLarge=Typography().titleLarge.copy(fontFamily=appFont))){
         Scaffold(containerColor=bg,topBar={
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) { when {
                 page=="settings" -> TopAppBar(title={Text("Réglages",fontSize=28.sp,fontWeight=FontWeight.Bold,color=ink)},navigationIcon={IconButton(onClick={page="home"}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
@@ -185,13 +206,13 @@ class MainActivity:ComponentActivity(){
         ){pad->
             AnimatedContent(targetState=page+if(thread!=null)"-thread" else "",label="orion-page"){screen->
                 when {
-                    page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,dark,{dark=it},sims,sim,{sim=it},setDefault,{page="about"})
+                    page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,dark,{dark=it},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},setDefault,{page="about"})
                     page=="about" -> AboutScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted)
                     page=="profile" && thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),thread!!,contacts,ink,muted,surface,ctx,call,{message->status=message})
                     thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,conversations,contacts,query,{query=it},
                         {item->thread=item;number=item.address;page="chat";status=""},
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
-                    else -> ChatScreen(Modifier.fillMaxSize().padding(pad),thread!!,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
+                    else -> ChatScreen(Modifier.fillMaxSize().padding(pad),thread!!,messages,appFont,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
                         {photoPicker.launch("image/*")},{cameraPicker.launch(null)},{photoUri=null},{uri->
                             val dest=thread!!.address.ifBlank{number}.trim()
                             if(dest.isBlank())status="Saisis le numéro du destinataire avant de joindre une photo."
@@ -215,7 +236,7 @@ class MainActivity:ComponentActivity(){
                             if(photoUri!=null)status="Utilise le bouton Envoyer pour joindre la photo."
                             else if(dest.isBlank())status="Saisis le numéro du destinataire."
                             else if(draft.isBlank())status="Écris un message."
-                            else send(dest,draft.trim(),sim.takeIf{it!=SubscriptionManager.INVALID_SUBSCRIPTION_ID}){result->status=result;if(result.startsWith("SMS transmis")){draft="";thread=ThreadItem(dest,"SMS envoyé depuis ORION",System.currentTimeMillis(),thread!!.displayName);refresh()}}
+                            else send(dest,draft.trim(),sim.takeIf{it!=SubscriptionManager.INVALID_SUBSCRIPTION_ID}){result->status=result;if(result.startsWith("Message envoyé")){draft="";thread=ThreadItem(dest,draft,System.currentTimeMillis(),thread!!.displayName);refresh()}}
                         })
                 }
             }
@@ -286,7 +307,7 @@ class MainActivity:ComponentActivity(){
     }
 }
 
-@Composable private fun ChatScreen(mod:Modifier,item:ThreadItem,number:String,onNumber:(String)->Unit,draft:String,onDraft:(String)->Unit,status:String,photoUri:Uri?,photoPreview:ImageBitmap?,onPickPhoto:()->Unit,onTakePhoto:()->Unit,onRemovePhoto:()->Unit,onSendPhoto:(Uri)->Unit,ink:Color,muted:Color,surface:Color,onProfile:()->Unit,onCall:()->Unit,onSend:()->Unit){
+@Composable private fun ChatScreen(mod:Modifier,item:ThreadItem,messages:List<SmsRecord>,font:FontFamily,number:String,onNumber:(String)->Unit,draft:String,onDraft:(String)->Unit,status:String,photoUri:Uri?,photoPreview:ImageBitmap?,onPickPhoto:()->Unit,onTakePhoto:()->Unit,onRemovePhoto:()->Unit,onSendPhoto:(Uri)->Unit,ink:Color,muted:Color,surface:Color,onProfile:()->Unit,onCall:()->Unit,onSend:()->Unit){
     val context=LocalContext.current
     var attachMenu by remember{mutableStateOf(false)}
     var recorder by remember{mutableStateOf<MediaRecorder?>(null)}
@@ -329,15 +350,21 @@ class MainActivity:ComponentActivity(){
             Spacer(Modifier.height(4.dp))
             HorizontalDivider(color=muted.copy(alpha=.3f),thickness=0.8.dp)
         }
-        Box(Modifier.weight(1f).fillMaxWidth().padding(top=14.dp),contentAlignment=Alignment.BottomEnd){
-            if(item.body.isNotBlank())Column(Modifier.fillMaxWidth(),horizontalAlignment=Alignment.End){
-                Box(Modifier.widthIn(max=310.dp).clip(RoundedCornerShape(21.dp,21.dp,5.dp,21.dp)).background(iBlue).padding(horizontal=16.dp,vertical=12.dp)){
-                    Text(item.body,color=Color.White,fontSize=16.sp,lineHeight=22.sp)
+        if(messages.isEmpty())Box(Modifier.weight(1f).fillMaxWidth().padding(top=14.dp),contentAlignment=Alignment.Center){
+            Column(horizontalAlignment=Alignment.CenterHorizontally){Avatar(item.displayName,62);Spacer(Modifier.height(10.dp));Text(item.displayName,color=ink,fontWeight=FontWeight.SemiBold,fontSize=17.sp);Text(if(item.address.isBlank())"Nouveau message" else item.address,color=muted,fontSize=13.sp)}
+        }else LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top=12.dp),contentPadding=PaddingValues(vertical=12.dp),verticalArrangement=Arrangement.spacedBy(9.dp)){
+            items(messages,key={it.id}){message->
+                val outgoing=message.type!=Telephony.Sms.MESSAGE_TYPE_INBOX
+                Column(Modifier.fillMaxWidth(),horizontalAlignment=if(outgoing)Alignment.End else Alignment.Start){
+                    Box(Modifier.widthIn(max=310.dp).clip(if(outgoing)RoundedCornerShape(21.dp,21.dp,5.dp,21.dp) else RoundedCornerShape(21.dp,21.dp,21.dp,5.dp)).background(if(outgoing)iBlue else surface).padding(horizontal=16.dp,vertical=11.dp)){
+                        Text(message.body,color=if(outgoing)Color.White else ink,fontSize=16.sp,lineHeight=22.sp,fontFamily=font)
+                    }
+                    if(outgoing)Row(verticalAlignment=Alignment.CenterVertically,modifier=Modifier.padding(top=3.dp,end=5.dp)){
+                        Text(if(message.type==Telephony.Sms.MESSAGE_TYPE_FAILED)"Échec" else "Envoyé",color=muted,fontSize=10.sp)
+                        Spacer(Modifier.width(5.dp))
+                        Text(if(message.type==Telephony.Sms.MESSAGE_TYPE_FAILED)"!" else if(message.status==Telephony.Sms.STATUS_COMPLETE)"✓✓" else "✓",color=if(message.status==Telephony.Sms.STATUS_COMPLETE) iBlue else muted,fontSize=12.sp,fontWeight=FontWeight.Bold)
+                    }
                 }
-                Text("SMS envoyé",color=muted,fontSize=10.sp,modifier=Modifier.padding(top=5.dp,end=5.dp))
-            }else Column(Modifier.fillMaxWidth().padding(bottom=28.dp),horizontalAlignment=Alignment.CenterHorizontally){
-                Avatar(item.displayName,62);Spacer(Modifier.height(10.dp));Text(item.displayName,color=ink,fontWeight=FontWeight.SemiBold,fontSize=17.sp)
-                Text(if(item.address.isBlank())"Nouveau message" else item.address,color=muted,fontSize=13.sp)
             }
         }
         if(photoUri!=null){
@@ -362,7 +389,7 @@ class MainActivity:ComponentActivity(){
             }
             Spacer(Modifier.width(7.dp))
             Row(Modifier.weight(1f).clip(RoundedCornerShape(23.dp)).background(surface).padding(start=15.dp,end=6.dp,top=5.dp,bottom=5.dp),verticalAlignment=Alignment.CenterVertically){
-                BasicTextField(value=draft,onValueChange=onDraft,modifier=Modifier.weight(1f).heightIn(min=36.dp,max=112.dp).padding(vertical=7.dp),textStyle=TextStyle(color=ink,fontSize=16.sp,lineHeight=21.sp),decorationBox={inner->if(draft.isEmpty())Text("SMS · Message texte",color=muted,fontSize=15.sp);inner()})
+                BasicTextField(value=draft,onValueChange=onDraft,modifier=Modifier.weight(1f).heightIn(min=36.dp,max=112.dp).padding(vertical=7.dp),textStyle=TextStyle(color=ink,fontSize=16.sp,lineHeight=21.sp,fontFamily=font),decorationBox={inner->if(draft.isEmpty())Text("SMS · Message texte",color=muted,fontSize=15.sp);inner()})
             }
             Spacer(Modifier.width(4.dp))
             IconButton(onClick={if(recording)stopAndShareAudio() else micPermission.launch(Manifest.permission.RECORD_AUDIO)},modifier=Modifier.size(42.dp).clip(CircleShape).background(if(recording)Color(0xFFFF3B30) else surface)){
@@ -429,7 +456,7 @@ class MainActivity:ComponentActivity(){
     }
 }
 
-@Composable private fun SettingsScreen(mod:Modifier,surface:Color,ink:Color,muted:Color,dark:Boolean,onDark:(Boolean)->Unit,sims:List<SimChoice>,selected:Int,onSim:(Int)->Unit,onDefault:()->Unit,onAbout:()->Unit){
+@Composable private fun SettingsScreen(mod:Modifier,surface:Color,ink:Color,muted:Color,dark:Boolean,onDark:(Boolean)->Unit,sims:List<SimChoice>,selected:Int,onSim:(Int)->Unit,fontChoice:String,onFont:(String)->Unit,onDefault:()->Unit,onAbout:()->Unit){
     Column(mod.padding(horizontal=16.dp)){
         Spacer(Modifier.height(16.dp));SectionTitle("APPLICATION",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
@@ -448,6 +475,11 @@ class MainActivity:ComponentActivity(){
         }
         Spacer(Modifier.height(22.dp));SectionTitle("APPARENCE",muted)
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp),verticalAlignment=Alignment.CenterVertically){Text("Mode sombre",color=ink,modifier=Modifier.weight(1f));Switch(dark,onDark)}
+        Spacer(Modifier.height(22.dp));SectionTitle("POLICE D’ÉCRITURE",muted)
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
+            Text("Choisir la police des messages",color=ink,fontWeight=FontWeight.SemiBold)
+            listOf("Sans","Serif","Monospace").forEach{choice->Row(Modifier.fillMaxWidth().clickable{onFont(choice)}.padding(vertical=10.dp),verticalAlignment=Alignment.CenterVertically){Text(choice,color=ink,modifier=Modifier.weight(1f),fontFamily=when(choice){"Serif"->FontFamily.Serif;"Monospace"->FontFamily.Monospace;else->FontFamily.SansSerif});if(fontChoice==choice)Icon(Icons.Default.Check,null,tint=iBlue)}}
+        }
         Spacer(Modifier.height(22.dp));SectionTitle("À PROPOS",muted)
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).clickable(onClick=onAbout).padding(16.dp),verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.Info,null,tint=iBlue);Spacer(Modifier.width(12.dp));Text("À propos d’ORION",color=ink,modifier=Modifier.weight(1f));Icon(Icons.Default.ChevronRight,null,tint=muted)}
         Spacer(Modifier.height(22.dp));SectionTitle("CONFIDENTIALITÉ",muted)
@@ -508,6 +540,16 @@ private fun openDialer(ctx:Context,number:String){
     }}catch(_:Exception){}
     return out.values.toList()
 }
+private fun readMessages(ctx:Context,address:String):List<SmsRecord>{
+    if(ContextCompat.checkSelfPermission(ctx,Manifest.permission.READ_SMS)!=PackageManager.PERMISSION_GRANTED)return emptyList()
+    val out=mutableListOf<SmsRecord>()
+    try{ctx.contentResolver.query(Telephony.Sms.CONTENT_URI,arrayOf(Telephony.Sms._ID,Telephony.Sms.ADDRESS,Telephony.Sms.BODY,Telephony.Sms.DATE,Telephony.Sms.TYPE,Telephony.Sms.STATUS),null,null,Telephony.Sms.DATE+" ASC")?.use{c->
+        val id=c.getColumnIndex(Telephony.Sms._ID);val ai=c.getColumnIndex(Telephony.Sms.ADDRESS);val bi=c.getColumnIndex(Telephony.Sms.BODY);val di=c.getColumnIndex(Telephony.Sms.DATE);val ti=c.getColumnIndex(Telephony.Sms.TYPE);val si=c.getColumnIndex(Telephony.Sms.STATUS)
+        while(c.moveToNext()&&out.size<300){val a=if(ai>=0)c.getString(ai).orEmpty() else "";if(normalizePhone(a)==normalizePhone(address)){out.add(SmsRecord(if(id>=0)c.getLong(id) else out.size.toLong(),if(bi>=0)c.getString(bi).orEmpty() else "",if(di>=0)c.getLong(di) else 0L,if(ti>=0)c.getInt(ti) else Telephony.Sms.MESSAGE_TYPE_INBOX,if(si>=0)c.getInt(si) else Telephony.Sms.STATUS_NONE))}}
+    }}catch(_:Exception){}
+    return out
+}
+
 private fun readThreads(ctx:Context):List<ThreadItem>{
     if(ContextCompat.checkSelfPermission(ctx,Manifest.permission.READ_SMS)!=PackageManager.PERMISSION_GRANTED)return emptyList()
     val names=readContacts(ctx).associate{normalizePhone(it.number) to it.name}

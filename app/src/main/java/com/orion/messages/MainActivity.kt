@@ -139,7 +139,7 @@ class MainActivity:ComponentActivity(){
     val cameraPicker=rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()){bitmap->
         if(bitmap!=null){val saved=runCatching{MediaStore.Images.Media.insertImage(ctx.contentResolver,bitmap,"ORION photo","Photo prise avec ORION")}.getOrNull();photoUri=saved?.let{Uri.parse(it)}}
     }
-    var attachMenu by remember{mutableStateOf(false)}
+
     val photoPreview=remember(photoUri){photoUri?.let{uri->runCatching{ctx.contentResolver.openInputStream(uri)?.use{stream->BitmapFactory.decodeStream(stream)?.asImageBitmap()}}.getOrNull()}}
     var status by remember{mutableStateOf("")}
     var selectedContact by remember{mutableStateOf<ContactItem?>(null)}
@@ -192,7 +192,7 @@ class MainActivity:ComponentActivity(){
                         {item->thread=item;number=item.address;page="chat";status=""},
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
                     else -> ChatScreen(Modifier.fillMaxSize().padding(pad),thread!!,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
-                        {attachMenu=true},{photoUri=null},{uri->
+                        {photoPicker.launch("image/*")},{photoUri=null},{uri->
                             val dest=thread!!.address.ifBlank{number}.trim()
                             if(dest.isBlank())status="Saisis le numéro du destinataire avant de joindre une photo."
                             else try{
@@ -209,7 +209,7 @@ class MainActivity:ComponentActivity(){
                                 photoUri=null
                                 status="Photo ouverte dans l'application de messagerie. Appuie sur Envoyer pour transmettre le MMS."
                             }catch(e:Exception){status="Impossible d'ouvrir l'envoi MMS : ${e.localizedMessage ?: "application compatible introuvable"}"}
-                        },ink,muted,surface,
+                        },{cameraPicker.launch(null)},ink,muted,surface,
                         {page="profile"},{call(thread!!.address.ifBlank{number})},{
                             val dest=thread!!.address.ifBlank{number}.trim()
                             if(photoUri!=null)status="Utilise le bouton Envoyer pour joindre la photo."
@@ -286,8 +286,9 @@ class MainActivity:ComponentActivity(){
     }
 }
 
-@Composable private fun ChatScreen(mod:Modifier,item:ThreadItem,number:String,onNumber:(String)->Unit,draft:String,onDraft:(String)->Unit,status:String,photoUri:Uri?,photoPreview:ImageBitmap?,onPickPhoto:()->Unit,onRemovePhoto:()->Unit,onSendPhoto:(Uri)->Unit,ink:Color,muted:Color,surface:Color,onProfile:()->Unit,onCall:()->Unit,onSend:()->Unit){
+@Composable private fun ChatScreen(mod:Modifier,item:ThreadItem,number:String,onNumber:(String)->Unit,draft:String,onDraft:(String)->Unit,status:String,photoUri:Uri?,photoPreview:ImageBitmap?,onPickPhoto:()->Unit,onTakePhoto:()->Unit,onRemovePhoto:()->Unit,onSendPhoto:(Uri)->Unit,ink:Color,muted:Color,surface:Color,onProfile:()->Unit,onCall:()->Unit,onSend:()->Unit){
     val context=LocalContext.current
+    var attachMenu by remember{mutableStateOf(false)}
     var recorder by remember{mutableStateOf<MediaRecorder?>(null)}
     var recordingFile by remember{mutableStateOf<File?>(null)}
     var recording by remember{mutableStateOf(false)}
@@ -355,8 +356,8 @@ class MainActivity:ComponentActivity(){
             Box {
                 IconButton(onClick=onPickPhoto,modifier=Modifier.size(44.dp).clip(CircleShape).background(surface)){Icon(Icons.Default.AddPhotoAlternate,"Joindre une photo",tint=iBlue,modifier=Modifier.size(23.dp))}
                 DropdownMenu(expanded=attachMenu,onDismissRequest={attachMenu=false}){
-                    DropdownMenuItem(text={Text("Prendre une photo")},leadingIcon={Icon(Icons.Default.CameraAlt,null)},onClick={attachMenu=false;cameraPicker.launch(null)})
-                    DropdownMenuItem(text={Text("Choisir dans la galerie")},leadingIcon={Icon(Icons.Default.PhotoLibrary,null)},onClick={attachMenu=false;photoPicker.launch("image/*")})
+                    DropdownMenuItem(text={Text("Prendre une photo")},leadingIcon={Icon(Icons.Default.CameraAlt,null)},onClick={attachMenu=false;onTakePhoto()})
+                    DropdownMenuItem(text={Text("Choisir dans la galerie")},leadingIcon={Icon(Icons.Default.PhotoLibrary,null)},onClick={attachMenu=false;onPickPhoto()})
                 }
             }
             Spacer(Modifier.width(7.dp))

@@ -220,7 +220,7 @@ class MainActivity:ComponentActivity(){
                     thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,conversations,contacts,query,{query=it},
                         {item->thread=item;number=item.address;page="chat";status=""},
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
-                    else -> ChatScreen(Modifier.fillMaxSize().padding(pad).imePadding(),thread!!,messages,appFont,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
+                    else -> ChatScreen(Modifier.fillMaxSize().padding(pad).imePadding(),thread!!,messages,appFont,appWeight,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
                         {photoPicker.launch("image/*")},{cameraPicker.launch(null)},{photoUri=null},{uri->
                             val dest=thread!!.address.ifBlank{number}.trim()
                             if(dest.isBlank())status="Saisis le numéro du destinataire avant de joindre une photo."
@@ -327,8 +327,10 @@ class MainActivity:ComponentActivity(){
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-@Composable private fun ChatScreen(mod:Modifier,item:ThreadItem,messages:List<SmsRecord>,font:FontFamily,number:String,onNumber:(String)->Unit,draft:String,onDraft:(String)->Unit,status:String,photoUri:Uri?,photoPreview:ImageBitmap?,onPickPhoto:()->Unit,onTakePhoto:()->Unit,onRemovePhoto:()->Unit,onSendPhoto:(Uri)->Unit,ink:Color,muted:Color,surface:Color,onProfile:()->Unit,onCall:()->Unit,onSend:()->Unit){
+@Composable private fun ChatScreen(mod:Modifier,item:ThreadItem,messages:List<SmsRecord>,font:FontFamily,fontWeight:FontWeight,number:String,onNumber:(String)->Unit,draft:String,onDraft:(String)->Unit,status:String,photoUri:Uri?,photoPreview:ImageBitmap?,onPickPhoto:()->Unit,onTakePhoto:()->Unit,onRemovePhoto:()->Unit,onSendPhoto:(Uri)->Unit,ink:Color,muted:Color,surface:Color,onProfile:()->Unit,onCall:()->Unit,onSend:()->Unit){
     val context=LocalContext.current
+    var currentTime by remember{mutableLongStateOf(System.currentTimeMillis())}
+    LaunchedEffect(Unit){while(true){kotlinx.coroutines.delay(60_000);currentTime=System.currentTimeMillis()}}
     var selectedMessages by remember{mutableStateOf(setOf<Long>())}
     val cannotReply=item.address.isNotBlank() && item.address.count{it.isDigit()} !in 7..15
     var attachMenu by remember{mutableStateOf(false)}
@@ -387,10 +389,10 @@ class MainActivity:ComponentActivity(){
             itemsIndexed(messages,key={_,message->message.id}){index,message->
                 val outgoing=message.type!=Telephony.Sms.MESSAGE_TYPE_INBOX
                 val newDay=index==0 || !sameCalendarDay(messages[index-1].date,message.date)
-                if(newDay) Text(messageDayLabel(message.date,System.currentTimeMillis()),color=muted,fontSize=12.sp,fontWeight=FontWeight.Medium,modifier=Modifier.fillMaxWidth().padding(vertical=7.dp),textAlign=androidx.compose.ui.text.style.TextAlign.Center)
+                if(newDay) Text(messageDayLabel(message.date,currentTime),color=muted,fontSize=12.sp,fontWeight=FontWeight.Medium,modifier=Modifier.fillMaxWidth().padding(vertical=7.dp),textAlign=androidx.compose.ui.text.style.TextAlign.Center)
                 Column(Modifier.fillMaxWidth().combinedClickable(onClick={if(selectedMessages.isNotEmpty())selectedMessages=if(selectedMessages.contains(message.id))selectedMessages-message.id else selectedMessages+message.id},onLongClick={selectedMessages=selectedMessages+message.id}).background(if(selectedMessages.contains(message.id))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=2.dp),horizontalAlignment=if(outgoing)Alignment.End else Alignment.Start){
                     Box(Modifier.widthIn(max=310.dp).clip(if(outgoing)RoundedCornerShape(21.dp,21.dp,5.dp,21.dp) else RoundedCornerShape(21.dp,21.dp,21.dp,5.dp)).background(if(outgoing)iBlue else surface).padding(horizontal=16.dp,vertical=11.dp)){
-                        Text(message.body,color=if(outgoing)Color.White else ink,fontSize=16.sp,lineHeight=22.sp,fontFamily=font,fontWeight=appWeightForChat(font))
+                        Text(message.body,color=if(outgoing)Color.White else ink,fontSize=16.sp,lineHeight=22.sp,fontFamily=font,fontWeight=fontWeight)
                     }
                     Text(messageTimeLabel(message.date),color=muted,fontSize=10.sp,modifier=Modifier.padding(top=3.dp,start=5.dp,end=5.dp))
                     if(outgoing)Row(verticalAlignment=Alignment.CenterVertically,modifier=Modifier.padding(top=1.dp,end=5.dp)){
@@ -586,7 +588,6 @@ private fun fontFamilyForChoice(choice:String):FontFamily=when(choice){
     "System"->FontFamily.Default
     else->FontFamily.SansSerif
 }
-private fun appWeightForChat(font:FontFamily):FontWeight=FontWeight.Normal
 private fun sameCalendarDay(first:Long,second:Long):Boolean{
     val a=java.util.Calendar.getInstance().apply{timeInMillis=first}
     val b=java.util.Calendar.getInstance().apply{timeInMillis=second}
@@ -601,7 +602,8 @@ private fun messageDayLabel(timestamp:Long,now:Long):String{
     return java.text.SimpleDateFormat("d MMMM yyyy",java.util.Locale.FRENCH).format(java.util.Date(timestamp))
 }
 private fun messageTimeLabel(timestamp:Long):String=java.text.SimpleDateFormat("HH:mm",java.util.Locale.getDefault()).format(java.util.Date(timestamp))
-\nprivate fun openDialer(ctx:Context,number:String){
+
+private fun openDialer(ctx:Context,number:String){
     if(number.isBlank())return
     runCatching{ctx.startActivity(Intent(Intent.ACTION_DIAL,Uri.parse("tel:"+Uri.encode(number))))}
 }

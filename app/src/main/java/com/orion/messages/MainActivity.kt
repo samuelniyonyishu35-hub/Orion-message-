@@ -39,6 +39,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -551,7 +553,11 @@ class MainActivity:ComponentActivity(){
 }
 
 @Composable private fun SettingsScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,dark:Boolean,onDark:(Boolean)->Unit,sims:List<SimChoice>,selected:Int,onSim:(Int)->Unit,fontChoice:String,onFont:(String)->Unit,onDefault:()->Unit,onAbout:()->Unit){
-    Column(mod.padding(horizontal=16.dp)){
+    var previewChoice by remember(fontChoice){mutableStateOf(fontChoice)}
+    val choices=listOf("System","San Francisco","Roboto","Rounded","Handwritten","Elegant","Typewriter","Condensed","Lato","Pacifico","Dancing Script","Light","Bold")
+    fun fontLabel(choice:String)=when(choice){"System"->"Police du système";"San Francisco"->"Style San Francisco (Inter)";"Handwritten"->"Manuscrite / stylo";"Elegant"->"Élégante";"Typewriter"->"Machine à écrire";"Pacifico"->"Manuscrite — Pacifico";"Dancing Script"->"Manuscrite — Dancing Script";else->choice}
+    fun weightFor(choice:String)=when(choice){"Light"->FontWeight.Light;"Bold"->FontWeight.Bold;else->FontWeight.Normal}
+    Column(mod.padding(horizontal=16.dp).verticalScroll(rememberScrollState())){
         Spacer(Modifier.height(16.dp));SectionTitle("APPLICATION",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
             Row(verticalAlignment=Alignment.CenterVertically){Box(Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(iBlue),contentAlignment=Alignment.Center){Icon(Icons.Default.Sms,null,tint=Color.White)}
@@ -571,13 +577,26 @@ class MainActivity:ComponentActivity(){
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp),verticalAlignment=Alignment.CenterVertically){Text("Mode sombre",color=ink,modifier=Modifier.weight(1f));Switch(dark,onDark)}
         Spacer(Modifier.height(22.dp));SectionTitle("POLICE D’ÉCRITURE",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
-            Text("Choisir la police des messages",color=ink,fontWeight=FontWeight.SemiBold)
-            Text("Aperçu : Aa Bonjour ! 012345",color=ink,fontSize=21.sp,fontFamily=fontFamilyForChoice(ctx,fontChoice),modifier=Modifier.padding(vertical=12.dp))
-            val choices=listOf("System","San Francisco","Roboto","Rounded","Handwritten","Elegant","Typewriter","Condensed","Lato","Pacifico","Dancing Script","Light","Bold")
-            choices.forEach{choice->Row(Modifier.fillMaxWidth().clickable{onFont(choice)}.padding(vertical=10.dp),verticalAlignment=Alignment.CenterVertically){
-                Column(Modifier.weight(1f)){Text(when(choice){"System"->"Police du système";"San Francisco"->"Style San Francisco (Inter)";"Handwritten"->"Manuscrite / stylo";"Elegant"->"Élégante";"Typewriter"->"Machine à écrire";"Pacifico"->"Manuscrite — Pacifico";"Dancing Script"->"Manuscrite — Dancing Script";"Lato"->"Lato";else->choice},color=ink,fontFamily=fontFamilyForChoice(ctx,choice),fontWeight=if(choice=="Bold")FontWeight.Bold else FontWeight.Normal);Text("Aa Bonjour ! 012345",color=muted,fontSize=12.sp,fontFamily=fontFamilyForChoice(ctx,choice))}
-                if(fontChoice==choice)Icon(Icons.Default.Check,null,tint=iBlue)
-            }}
+            Text("Choisis une police pour voir son aperçu immédiatement.",color=ink,fontWeight=FontWeight.SemiBold)
+            Text("POLICE ACTUELLEMENT UTILISÉE",color=muted,fontSize=10.sp,fontWeight=FontWeight.Bold,letterSpacing=1.sp,modifier=Modifier.padding(top=14.dp))
+            Text(fontLabel(fontChoice),color=iBlue,fontSize=13.sp,fontWeight=FontWeight.SemiBold)
+            Text("Aa Bonjour ! 012345",color=ink,fontSize=25.sp,fontFamily=fontFamilyForChoice(ctx,fontChoice),fontWeight=weightFor(fontChoice),modifier=Modifier.padding(top=5.dp,bottom=12.dp))
+            HorizontalDivider(color=muted.copy(alpha=.25f))
+            Text("APERÇU DE LA SÉLECTION",color=muted,fontSize=10.sp,fontWeight=FontWeight.Bold,letterSpacing=1.sp,modifier=Modifier.padding(top=14.dp))
+            Text(if(previewChoice=="System")"Police système Android — celle définie sur ton téléphone" else fontLabel(previewChoice),color=ink,fontSize=14.sp,fontWeight=FontWeight.Medium,modifier=Modifier.padding(top=5.dp))
+            Text("Aa Bonjour ! Comment vas-tu ? 0123456789",color=ink,fontSize=23.sp,fontFamily=fontFamilyForChoice(ctx,previewChoice),fontWeight=weightFor(previewChoice),modifier=Modifier.padding(vertical=12.dp))
+            choices.forEach{choice->
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable{previewChoice=choice}.padding(horizontal=4.dp,vertical=9.dp),verticalAlignment=Alignment.CenterVertically){
+                    Column(Modifier.weight(1f)){
+                        Text(fontLabel(choice),color=ink,fontSize=15.sp,fontFamily=fontFamilyForChoice(ctx,choice),fontWeight=weightFor(choice))
+                        Text("Aa Bonjour ! 012345",color=muted,fontSize=19.sp,fontFamily=fontFamilyForChoice(ctx,choice),fontWeight=weightFor(choice),modifier=Modifier.padding(top=3.dp))
+                    }
+                    Checkbox(checked=previewChoice==choice,onCheckedChange={checked->if(checked)previewChoice=choice},colors=CheckboxDefaults.colors(checkedColor=iBlue))
+                }
+                if(choice!=choices.last())HorizontalDivider(color=muted.copy(alpha=.15f))
+            }
+            Button(onClick={onFont(previewChoice)},modifier=Modifier.fillMaxWidth().padding(top=14.dp),shape=RoundedCornerShape(13.dp)){Icon(Icons.Default.Check,null);Spacer(Modifier.width(8.dp));Text("Utiliser cette police")}
+            Text("La police ne sera appliquée à toute l’application qu’après validation.",color=muted,fontSize=11.sp,modifier=Modifier.padding(top=8.dp))
         }
         Spacer(Modifier.height(22.dp));SectionTitle("À PROPOS",muted)
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).clickable(onClick=onAbout).padding(16.dp),verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.Info,null,tint=iBlue);Spacer(Modifier.width(12.dp));Text("À propos d’ORION",color=ink,modifier=Modifier.weight(1f));Icon(Icons.Default.ChevronRight,null,tint=muted)}
@@ -586,6 +605,7 @@ class MainActivity:ComponentActivity(){
             Text("Noms de tes contacts",color=ink,fontWeight=FontWeight.SemiBold)
             Text("ORION utilise l'autorisation Contacts pour associer les numéros aux noms enregistrés dans ton carnet d'adresses.",color=muted,fontSize=12.sp)
         }
+        Spacer(Modifier.height(28.dp))
     }
 }
 @Composable private fun AboutScreen(mod:Modifier,surface:Color,ink:Color,muted:Color){

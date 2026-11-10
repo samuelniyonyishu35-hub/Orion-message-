@@ -370,7 +370,7 @@ class MainActivity:ComponentActivity(){
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(18.dp)){
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
                 Text("Version",color=ink,modifier=Modifier.weight(1f))
-                Text(BuildConfig.VERSION_NAME,color=muted,fontWeight=FontWeight.SemiBold)
+                Text("1.0",color=muted,fontWeight=FontWeight.SemiBold)
             }
             HorizontalDivider(Modifier.padding(vertical=13.dp),color=muted.copy(alpha=.25f))
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){

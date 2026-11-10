@@ -258,6 +258,7 @@ class MainActivity:ComponentActivity(){
 }
 
 @Composable private fun HomeScreen(mod:Modifier,surface:Color,ink:Color,muted:Color,threads:List<ThreadItem>,contacts:List<ContactItem>,query:String,onQuery:(String)->Unit,onOpen:(ThreadItem)->Unit,onContact:(ContactItem)->Unit){
+    var selectedThreads by remember{mutableStateOf(setOf<String>())}
     val normalizedQuery=query.filter{it.isDigit()}
     val matchingThreads=threads.filter{
         query.isBlank() || it.address.contains(query,true) || it.displayName.contains(query,true) ||
@@ -268,6 +269,15 @@ class MainActivity:ComponentActivity(){
         (normalizedQuery.length>=2 && it.number.filter{ch->ch.isDigit()}.contains(normalizedQuery))
     }.take(8)
     Column(mod.padding(horizontal=16.dp)){
+        if(selectedThreads.isNotEmpty()){
+            Row(Modifier.fillMaxWidth().padding(vertical=5.dp),verticalAlignment=Alignment.CenterVertically){
+                IconButton(onClick={selectedThreads=emptySet()}){Icon(Icons.Default.Close,null,tint=ink)}
+                Text("${selectedThreads.size} sélectionnée(s)",color=ink,modifier=Modifier.weight(1f))
+                IconButton(onClick={val t=threads.filter{selectedThreads.contains(it.address)}.joinToString("\n"){it.body};(ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(ClipData.newPlainText("Discussions",t));selectedThreads=emptySet()}){Icon(Icons.Default.ContentCopy,"Copier",tint=iBlue)}
+                IconButton(onClick={val t=threads.filter{selectedThreads.contains(it.address)}.joinToString("\n"){it.body};ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,t),"Partager"));selectedThreads=emptySet()}){Icon(Icons.Default.Share,"Partager",tint=iBlue)}
+                IconButton(onClick={selectedThreads.forEach{a->runCatching{ctx.contentResolver.delete(Telephony.Sms.CONTENT_URI,"address=?",arrayOf(a))}};selectedThreads=emptySet()}){Icon(Icons.Default.Delete,"Supprimer",tint=Color(0xFFFF453A))}
+            }
+        }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if(surface==Color.White)Color(0xFFE5E5EA) else surface).padding(horizontal=12.dp,vertical=2.dp),verticalAlignment=Alignment.CenterVertically){
             Icon(Icons.Default.Search,null,tint=muted)
@@ -298,8 +308,9 @@ class MainActivity:ComponentActivity(){
             }
         }else LazyColumn(contentPadding=PaddingValues(bottom=100.dp)){
             items(matchingThreads){item->
-                Row(Modifier.fillMaxWidth().clickable{onOpen(item)}.padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
-                    Avatar(item.displayName,50);Spacer(Modifier.width(13.dp))
+                Row(Modifier.fillMaxWidth().combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}).background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
+                    if(selectedThreads.contains(item.address))Icon(Icons.Default.CheckCircle,null,tint=iBlue,modifier=Modifier.size(50.dp).padding(12.dp)) else Avatar(item.displayName,50)
+                    Spacer(Modifier.width(13.dp))
                     Column(Modifier.weight(1f)){
                         Text(item.displayName,color=ink,fontSize=16.sp,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)
                         Spacer(Modifier.height(3.dp));Text(item.body.ifBlank{"Message de ${item.displayName}"},color=muted,fontSize=14.sp,maxLines=1,overflow=TextOverflow.Ellipsis)

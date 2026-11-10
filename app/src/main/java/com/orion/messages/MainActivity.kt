@@ -36,6 +36,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -217,7 +218,7 @@ class MainActivity:ComponentActivity(){
                     thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,conversations,contacts,query,{query=it},
                         {item->thread=item;number=item.address;page="chat";status=""},
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
-                    else -> ChatScreen(Modifier.fillMaxSize().padding(pad),thread!!,messages,appFont,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
+                    else -> ChatScreen(Modifier.fillMaxSize().padding(pad).imePadding(),thread!!,messages,appFont,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
                         {photoPicker.launch("image/*")},{cameraPicker.launch(null)},{photoUri=null},{uri->
                             val dest=thread!!.address.ifBlank{number}.trim()
                             if(dest.isBlank())status="Saisis le numéro du destinataire avant de joindre une photo."
@@ -302,7 +303,6 @@ class MainActivity:ComponentActivity(){
                     Column(Modifier.weight(1f)){
                         Text(item.displayName,color=ink,fontSize=16.sp,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)
                         Spacer(Modifier.height(3.dp));Text(item.body.ifBlank{"Message de ${item.displayName}"},color=muted,fontSize=14.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
-                        Text("Source : ${senderLabel(item.address)}",color=muted.copy(alpha=.82f),fontSize=10.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                     }
                     Icon(Icons.Default.ChevronRight,null,tint=muted)
                 }
@@ -314,6 +314,7 @@ class MainActivity:ComponentActivity(){
 
 @Composable private fun ChatScreen(mod:Modifier,item:ThreadItem,messages:List<SmsRecord>,font:FontFamily,number:String,onNumber:(String)->Unit,draft:String,onDraft:(String)->Unit,status:String,photoUri:Uri?,photoPreview:ImageBitmap?,onPickPhoto:()->Unit,onTakePhoto:()->Unit,onRemovePhoto:()->Unit,onSendPhoto:(Uri)->Unit,ink:Color,muted:Color,surface:Color,onProfile:()->Unit,onCall:()->Unit,onSend:()->Unit){
     val context=LocalContext.current
+    val cannotReply=item.address.isNotBlank() && item.address.count{it.isDigit()} !in 7..15
     var attachMenu by remember{mutableStateOf(false)}
     var recorder by remember{mutableStateOf<MediaRecorder?>(null)}
     var recordingFile by remember{mutableStateOf<File?>(null)}
@@ -383,6 +384,10 @@ class MainActivity:ComponentActivity(){
         }
         if(recording)Text("Enregistrement en cours… Touchez le bouton rouge pour terminer et partager.",color=Color(0xFFFF453A),fontSize=11.sp,modifier=Modifier.padding(horizontal=5.dp,vertical=5.dp))
         if(status.isNotBlank())Text(status,color=muted,fontSize=11.sp,modifier=Modifier.padding(horizontal=5.dp,vertical=5.dp))
+        if(cannotReply){
+            HorizontalDivider(color=muted.copy(alpha=.25f))
+            Text("Impossible de répondre à cet expéditeur : ce numéro court ou identifiant ne reçoit pas les SMS.",color=muted,fontSize=13.sp,modifier=Modifier.fillMaxWidth().padding(vertical=16.dp))
+        }else{
         HorizontalDivider(color=muted.copy(alpha=.25f))
         Row(Modifier.fillMaxWidth().padding(top=10.dp,bottom=8.dp),verticalAlignment=Alignment.Bottom){
             Box {
@@ -404,6 +409,7 @@ class MainActivity:ComponentActivity(){
             IconButton(onClick={if(photoUri!=null)onSendPhoto(photoUri) else onSend()},enabled=draft.isNotBlank()||photoUri!=null,modifier=Modifier.size(46.dp).clip(CircleShape).background(if(draft.isNotBlank()||photoUri!=null)iBlue else muted.copy(alpha=.28f))){
                 Icon(Icons.Default.Send,"Envoyer",tint=Color.White,modifier=Modifier.size(22.dp))
             }
+        }
         }
     }
 }

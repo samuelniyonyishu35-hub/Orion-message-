@@ -19,7 +19,7 @@ jobs:
           gradle-version: '8.9'
       - name: Download bundled fonts
         run: |
-          mkdir -p app/src/main/res/font
+          mkdir -p app/src/main/res/font app/src/main/assets/font-licenses
           curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz%2Cwght%5D.ttf' -o app/src/main/res/font/inter.ttf
           curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto%5Bwdth%2Cwght%5D.ttf' -o app/src/main/res/font/roboto.ttf
           curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/nunito/Nunito%5Bwght%5D.ttf' -o app/src/main/res/font/nunito.ttf
@@ -27,9 +27,19 @@ jobs:
           curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf' -o app/src/main/res/font/playfair_display.ttf
           curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/sourcecodepro/SourceCodePro%5Bwght%5D.ttf' -o app/src/main/res/font/source_code_pro.ttf
           curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/Oswald%5Bwght%5D.ttf' -o app/src/main/res/font/oswald.ttf
-          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/lato/Lato%5Bwght%5D.ttf' -o app/src/main/res/font/lato.ttf
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/lato/Lato-Regular.ttf' -o app/src/main/res/font/lato.ttf
           curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/pacifico/Pacifico-Regular.ttf' -o app/src/main/res/font/pacifico.ttf
           curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/dancingscript/DancingScript%5Bwght%5D.ttf' -o app/src/main/res/font/dancing_script.ttf
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/inter/OFL.txt' -o app/src/main/assets/font-licenses/inter-OFL.txt
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/OFL.txt' -o app/src/main/assets/font-licenses/roboto-OFL.txt
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/nunito/OFL.txt' -o app/src/main/assets/font-licenses/nunito-OFL.txt
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/caveat/OFL.txt' -o app/src/main/assets/font-licenses/caveat-OFL.txt
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/OFL.txt' -o app/src/main/assets/font-licenses/playfairdisplay-OFL.txt
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/sourcecodepro/OFL.txt' -o app/src/main/assets/font-licenses/sourcecodepro-OFL.txt
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/OFL.txt' -o app/src/main/assets/font-licenses/oswald-OFL.txt
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/lato/OFL.txt' -o app/src/main/assets/font-licenses/lato-OFL.txt
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/pacifico/OFL.txt' -o app/src/main/assets/font-licenses/pacifico-OFL.txt
+          curl --retry 3 -fLsS 'https://raw.githubusercontent.com/google/fonts/main/ofl/dancingscript/OFL.txt' -o app/src/main/assets/font-licenses/dancingscript-OFL.txt
       - name: Build debug APK
         run: gradle --no-daemon assembleDebug
       - name: Upload APK

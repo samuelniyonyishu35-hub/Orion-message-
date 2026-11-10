@@ -40,7 +40,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.items\nimport androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -173,8 +173,9 @@ class MainActivity:ComponentActivity(){
     val sims=remember(tick){readSims(ctx)}
     val conversations=remember(tick){readThreads(ctx)}
     val messages=remember(tick,thread?.address){thread?.address?.takeIf{it.isNotBlank()}?.let{readMessages(ctx,it)}?: emptyList()}
-    var fontChoice by remember{mutableStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getString("font","Sans")?:"Sans")}
-    val appFont=when(fontChoice){"Serif"->FontFamily.Serif;"Monospace"->FontFamily.Monospace;else->FontFamily.SansSerif}
+    var fontChoice by remember{mutableStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getString("font","System")?:"System")}
+    val appFont=fontFamilyForChoice(fontChoice)
+    val appWeight=when(fontChoice){"Light"->FontWeight.Light;"Bold"->FontWeight.Bold;else->FontWeight.Normal}
     val contacts=remember(tick){readContacts(ctx)}
     LaunchedEffect(sims){if(sims.none{it.id==sim})sim=sims.firstOrNull()?.id?:SubscriptionManager.INVALID_SUBSCRIPTION_ID}
     val bg=if(dark)iDark else iLight
@@ -190,7 +191,7 @@ class MainActivity:ComponentActivity(){
             bars.isAppearanceLightNavigationBars=!dark
         }
     }
-    MaterialTheme(colorScheme=if(dark)darkColorScheme(primary=iBlue,background=bg,surface=surface) else lightColorScheme(primary=iBlue,background=bg,surface=surface),typography=Typography().copy(bodyLarge=Typography().bodyLarge.copy(fontFamily=appFont),bodyMedium=Typography().bodyMedium.copy(fontFamily=appFont),bodySmall=Typography().bodySmall.copy(fontFamily=appFont),titleLarge=Typography().titleLarge.copy(fontFamily=appFont))){
+    MaterialTheme(colorScheme=if(dark)darkColorScheme(primary=iBlue,background=bg,surface=surface) else lightColorScheme(primary=iBlue,background=bg,surface=surface),typography=Typography().copy(bodyLarge=Typography().bodyLarge.copy(fontFamily=appFont,fontWeight=appWeight),bodyMedium=Typography().bodyMedium.copy(fontFamily=appFont,fontWeight=appWeight),bodySmall=Typography().bodySmall.copy(fontFamily=appFont,fontWeight=appWeight),titleLarge=Typography().titleLarge.copy(fontFamily=appFont,fontWeight=appWeight))){
         Scaffold(containerColor=bg,topBar={
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) { when {
                 page=="settings" -> TopAppBar(title={Text("Réglages",fontSize=28.sp,fontWeight=FontWeight.Bold,color=ink)},navigationIcon={IconButton(onClick={page="home"}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
@@ -383,13 +384,16 @@ class MainActivity:ComponentActivity(){
         if(messages.isEmpty())Box(Modifier.weight(1f).fillMaxWidth().padding(top=14.dp),contentAlignment=Alignment.Center){
             Column(horizontalAlignment=Alignment.CenterHorizontally){Avatar(item.displayName,62);Spacer(Modifier.height(10.dp));Text(item.displayName,color=ink,fontWeight=FontWeight.SemiBold,fontSize=17.sp);Text(if(item.address.isBlank())"Nouveau message" else item.address,color=muted,fontSize=13.sp)}
         }else LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top=12.dp),contentPadding=PaddingValues(vertical=12.dp),verticalArrangement=Arrangement.spacedBy(9.dp)){
-            items(messages,key={it.id}){message->
+            itemsIndexed(messages,key={_,message->message.id}){index,message->
                 val outgoing=message.type!=Telephony.Sms.MESSAGE_TYPE_INBOX
+                val newDay=index==0 || !sameCalendarDay(messages[index-1].date,message.date)
+                if(newDay) Text(messageDayLabel(message.date,System.currentTimeMillis()),color=muted,fontSize=12.sp,fontWeight=FontWeight.Medium,modifier=Modifier.fillMaxWidth().padding(vertical=7.dp),textAlign=androidx.compose.ui.text.style.TextAlign.Center)
                 Column(Modifier.fillMaxWidth().combinedClickable(onClick={if(selectedMessages.isNotEmpty())selectedMessages=if(selectedMessages.contains(message.id))selectedMessages-message.id else selectedMessages+message.id},onLongClick={selectedMessages=selectedMessages+message.id}).background(if(selectedMessages.contains(message.id))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=2.dp),horizontalAlignment=if(outgoing)Alignment.End else Alignment.Start){
                     Box(Modifier.widthIn(max=310.dp).clip(if(outgoing)RoundedCornerShape(21.dp,21.dp,5.dp,21.dp) else RoundedCornerShape(21.dp,21.dp,21.dp,5.dp)).background(if(outgoing)iBlue else surface).padding(horizontal=16.dp,vertical=11.dp)){
-                        Text(message.body,color=if(outgoing)Color.White else ink,fontSize=16.sp,lineHeight=22.sp,fontFamily=font)
+                        Text(message.body,color=if(outgoing)Color.White else ink,fontSize=16.sp,lineHeight=22.sp,fontFamily=font,fontWeight=appWeightForChat(font))
                     }
-                    if(outgoing)Row(verticalAlignment=Alignment.CenterVertically,modifier=Modifier.padding(top=3.dp,end=5.dp)){
+                    Text(messageTimeLabel(message.date),color=muted,fontSize=10.sp,modifier=Modifier.padding(top=3.dp,start=5.dp,end=5.dp))
+                    if(outgoing)Row(verticalAlignment=Alignment.CenterVertically,modifier=Modifier.padding(top=1.dp,end=5.dp)){
                         Text(if(message.type==Telephony.Sms.MESSAGE_TYPE_FAILED)"Échec" else "Envoyé",color=muted,fontSize=10.sp)
                         Spacer(Modifier.width(5.dp))
                         Text(if(message.type==Telephony.Sms.MESSAGE_TYPE_FAILED)"!" else if(message.status==Telephony.Sms.STATUS_COMPLETE)"✓✓" else "✓",color=if(message.status==Telephony.Sms.STATUS_COMPLETE) iBlue else muted,fontSize=12.sp,fontWeight=FontWeight.Bold)
@@ -525,7 +529,12 @@ class MainActivity:ComponentActivity(){
         Spacer(Modifier.height(22.dp));SectionTitle("POLICE D’ÉCRITURE",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
             Text("Choisir la police des messages",color=ink,fontWeight=FontWeight.SemiBold)
-            listOf("Sans","Serif","Monospace").forEach{choice->Row(Modifier.fillMaxWidth().clickable{onFont(choice)}.padding(vertical=10.dp),verticalAlignment=Alignment.CenterVertically){Text(choice,color=ink,modifier=Modifier.weight(1f),fontFamily=when(choice){"Serif"->FontFamily.Serif;"Monospace"->FontFamily.Monospace;else->FontFamily.SansSerif});if(fontChoice==choice)Icon(Icons.Default.Check,null,tint=iBlue)}}
+            Text("Aperçu : Aa Bonjour ! 012345",color=ink,fontSize=21.sp,fontFamily=fontFamilyForChoice(fontChoice),modifier=Modifier.padding(vertical=12.dp))
+            val choices=listOf("System","San Francisco","Roboto","Rounded","Handwritten","Elegant","Typewriter","Condensed","Light","Bold")
+            choices.forEach{choice->Row(Modifier.fillMaxWidth().clickable{onFont(choice)}.padding(vertical=10.dp),verticalAlignment=Alignment.CenterVertically){
+                Column(Modifier.weight(1f)){Text(when(choice){"System"->"Police du système";"Handwritten"->"Manuscrite / stylo";"Elegant"->"Élégante";"Typewriter"->"Machine à écrire";else->choice},color=ink,fontFamily=fontFamilyForChoice(choice),fontWeight=if(choice=="Bold")FontWeight.Bold else FontWeight.Normal);Text("Aa Bonjour ! 012345",color=muted,fontSize=12.sp,fontFamily=fontFamilyForChoice(choice))}
+                if(fontChoice==choice)Icon(Icons.Default.Check,null,tint=iBlue)
+            }}
         }
         Spacer(Modifier.height(22.dp));SectionTitle("À PROPOS",muted)
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).clickable(onClick=onAbout).padding(16.dp),verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.Info,null,tint=iBlue);Spacer(Modifier.width(12.dp));Text("À propos d’ORION",color=ink,modifier=Modifier.weight(1f));Icon(Icons.Default.ChevronRight,null,tint=muted)}
@@ -568,7 +577,31 @@ class MainActivity:ComponentActivity(){
 }
 @Composable private fun SectionTitle(value:String,color:Color){Text(value,color=color,fontSize=11.sp,fontWeight=FontWeight.Bold,letterSpacing=1.3.sp);Spacer(Modifier.height(9.dp))}
 
-private fun openDialer(ctx:Context,number:String){
+
+private fun fontFamilyForChoice(choice:String):FontFamily=when(choice){
+    "Handwritten"->FontFamily.Cursive
+    "Elegant"->FontFamily.Serif
+    "Typewriter"->FontFamily.Monospace
+    "Rounded"->FontFamily.SansSerif
+    "System"->FontFamily.Default
+    else->FontFamily.SansSerif
+}
+private fun appWeightForChat(font:FontFamily):FontWeight=FontWeight.Normal
+private fun sameCalendarDay(first:Long,second:Long):Boolean{
+    val a=java.util.Calendar.getInstance().apply{timeInMillis=first}
+    val b=java.util.Calendar.getInstance().apply{timeInMillis=second}
+    return a.get(java.util.Calendar.YEAR)==b.get(java.util.Calendar.YEAR)&&a.get(java.util.Calendar.DAY_OF_YEAR)==b.get(java.util.Calendar.DAY_OF_YEAR)
+}
+private fun messageDayLabel(timestamp:Long,now:Long):String{
+    val today=java.util.Calendar.getInstance().apply{timeInMillis=now}
+    val date=java.util.Calendar.getInstance().apply{timeInMillis=timestamp}
+    if(sameCalendarDay(timestamp,now))return "Aujourd’hui"
+    today.add(java.util.Calendar.DAY_OF_YEAR,-1)
+    if(sameCalendarDay(timestamp,today.timeInMillis))return "Hier"
+    return java.text.SimpleDateFormat("d MMMM yyyy",java.util.Locale.FRENCH).format(java.util.Date(timestamp))
+}
+private fun messageTimeLabel(timestamp:Long):String=java.text.SimpleDateFormat("HH:mm",java.util.Locale.getDefault()).format(java.util.Date(timestamp))
+\nprivate fun openDialer(ctx:Context,number:String){
     if(number.isBlank())return
     runCatching{ctx.startActivity(Intent(Intent.ACTION_DIAL,Uri.parse("tel:"+Uri.encode(number))))}
 }

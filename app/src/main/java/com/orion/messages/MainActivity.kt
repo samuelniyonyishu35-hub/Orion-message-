@@ -325,6 +325,7 @@ class MainActivity:ComponentActivity(){
 
 @Composable private fun ChatScreen(mod:Modifier,item:ThreadItem,messages:List<SmsRecord>,font:FontFamily,number:String,onNumber:(String)->Unit,draft:String,onDraft:(String)->Unit,status:String,photoUri:Uri?,photoPreview:ImageBitmap?,onPickPhoto:()->Unit,onTakePhoto:()->Unit,onRemovePhoto:()->Unit,onSendPhoto:(Uri)->Unit,ink:Color,muted:Color,surface:Color,onProfile:()->Unit,onCall:()->Unit,onSend:()->Unit){
     val context=LocalContext.current
+    var selectedMessages by remember{mutableStateOf(setOf<Long>())}
     val cannotReply=item.address.isNotBlank() && item.address.count{it.isDigit()} !in 7..15
     var attachMenu by remember{mutableStateOf(false)}
     var recorder by remember{mutableStateOf<MediaRecorder?>(null)}
@@ -357,6 +358,15 @@ class MainActivity:ComponentActivity(){
     }
     val micPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){granted->if(granted)startAudioRecording() else Toast.makeText(context,"Autorisation du microphone refusée.",Toast.LENGTH_LONG).show()}
     Column(mod.padding(horizontal=14.dp)){
+        if(selectedMessages.isNotEmpty()){
+            Row(Modifier.fillMaxWidth().padding(vertical=5.dp),verticalAlignment=Alignment.CenterVertically){
+                IconButton(onClick={selectedMessages=emptySet()}){Icon(Icons.Default.Close,null,tint=ink)}
+                Text("${selectedMessages.size} sélectionné(s)",color=ink,modifier=Modifier.weight(1f))
+                IconButton(onClick={val t=messages.filter{selectedMessages.contains(it.id)}.joinToString("\n"){it.body};(context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(ClipData.newPlainText("Messages",t));selectedMessages=emptySet()}){Icon(Icons.Default.ContentCopy,"Copier",tint=iBlue)}
+                IconButton(onClick={val t=messages.filter{selectedMessages.contains(it.id)}.joinToString("\n"){it.body};context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,t),"Partager"));selectedMessages=emptySet()}){Icon(Icons.Default.Share,"Partager",tint=iBlue)}
+                IconButton(onClick={selectedMessages.forEach{id->runCatching{context.contentResolver.delete(Uri.parse("content://sms/$id"),null,null)}};selectedMessages=emptySet()}){Icon(Icons.Default.Delete,"Supprimer",tint=Color(0xFFFF453A))}
+            }
+        }
         if(item.address.isBlank()){
             Row(Modifier.fillMaxWidth().padding(top=8.dp,bottom=8.dp),verticalAlignment=Alignment.CenterVertically){
                 Text("À :",color=muted,fontSize=16.sp);Spacer(Modifier.width(10.dp))
@@ -372,7 +382,7 @@ class MainActivity:ComponentActivity(){
         }else LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top=12.dp),contentPadding=PaddingValues(vertical=12.dp),verticalArrangement=Arrangement.spacedBy(9.dp)){
             items(messages,key={it.id}){message->
                 val outgoing=message.type!=Telephony.Sms.MESSAGE_TYPE_INBOX
-                Column(Modifier.fillMaxWidth(),horizontalAlignment=if(outgoing)Alignment.End else Alignment.Start){
+                Column(Modifier.fillMaxWidth().combinedClickable(onClick={if(selectedMessages.isNotEmpty())selectedMessages=if(selectedMessages.contains(message.id))selectedMessages-message.id else selectedMessages+message.id},onLongClick={selectedMessages=selectedMessages+message.id}).background(if(selectedMessages.contains(message.id))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=2.dp),horizontalAlignment=if(outgoing)Alignment.End else Alignment.Start){
                     Box(Modifier.widthIn(max=310.dp).clip(if(outgoing)RoundedCornerShape(21.dp,21.dp,5.dp,21.dp) else RoundedCornerShape(21.dp,21.dp,21.dp,5.dp)).background(if(outgoing)iBlue else surface).padding(horizontal=16.dp,vertical=11.dp)){
                         Text(message.body,color=if(outgoing)Color.White else ink,fontSize=16.sp,lineHeight=22.sp,fontFamily=font)
                     }

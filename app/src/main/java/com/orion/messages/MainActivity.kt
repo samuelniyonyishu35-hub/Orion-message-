@@ -275,9 +275,9 @@ class MainActivity:ComponentActivity(){
             Row(Modifier.fillMaxWidth().padding(vertical=5.dp),verticalAlignment=Alignment.CenterVertically){
                 IconButton(onClick={selectedThreads=emptySet()}){Icon(Icons.Default.Close,null,tint=ink)}
                 Text("${selectedThreads.size} sélectionnée(s)",color=ink,modifier=Modifier.weight(1f))
-                IconButton(onClick={val t=threads.filter{selectedThreads.contains(it.address)}.joinToString("\n"){it.body};(ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(ClipData.newPlainText("Discussions",t));selectedThreads=emptySet()}){Icon(Icons.Default.ContentCopy,"Copier",tint=iBlue)}
-                IconButton(onClick={val t=threads.filter{selectedThreads.contains(it.address)}.joinToString("\n"){it.body};ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,t),"Partager"));selectedThreads=emptySet()}){Icon(Icons.Default.Share,"Partager",tint=iBlue)}
-                IconButton(onClick={selectedThreads.forEach{a->runCatching{ctx.contentResolver.delete(Telephony.Sms.CONTENT_URI,"address=?",arrayOf(a))}};selectedThreads=emptySet()}){Icon(Icons.Default.Delete,"Supprimer",tint=Color(0xFFFF453A))}
+                IconButton(onClick={val t=threads.filter{selectedThreads.contains(it.address)}.joinToString("\n"){ "${it.displayName}: ${it.body}" };if(copyTextToClipboard(ctx,t))Toast.makeText(ctx,"Texte copié",Toast.LENGTH_SHORT).show() else Toast.makeText(ctx,"Copie impossible",Toast.LENGTH_SHORT).show()}){Icon(Icons.Default.ContentCopy,"Copier",tint=iBlue)}
+                IconButton(onClick={val t=threads.filter{selectedThreads.contains(it.address)}.joinToString("\n"){ "${it.displayName}: ${it.body}" };shareTextWithChooser(ctx,t)}){Icon(Icons.Default.Share,"Partager",tint=iBlue)}
+                IconButton(onClick={val count=selectedThreads.sumOf{deleteConversation(ctx,it)};selectedThreads=emptySet();Toast.makeText(ctx,if(count>0)"$count message(s) supprimé(s)" else "Suppression impossible : définis ORION comme application SMS par défaut",Toast.LENGTH_LONG).show()}){Icon(Icons.Default.Delete,"Supprimer",tint=Color(0xFFFF453A))}
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -365,9 +365,9 @@ class MainActivity:ComponentActivity(){
             Row(Modifier.fillMaxWidth().padding(vertical=5.dp),verticalAlignment=Alignment.CenterVertically){
                 IconButton(onClick={selectedMessages=emptySet()}){Icon(Icons.Default.Close,null,tint=ink)}
                 Text("${selectedMessages.size} sélectionné(s)",color=ink,modifier=Modifier.weight(1f))
-                IconButton(onClick={val t=messages.filter{selectedMessages.contains(it.id)}.joinToString("\n"){it.body};(context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(ClipData.newPlainText("Messages",t));selectedMessages=emptySet()}){Icon(Icons.Default.ContentCopy,"Copier",tint=iBlue)}
-                IconButton(onClick={val t=messages.filter{selectedMessages.contains(it.id)}.joinToString("\n"){it.body};context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,t),"Partager"));selectedMessages=emptySet()}){Icon(Icons.Default.Share,"Partager",tint=iBlue)}
-                IconButton(onClick={selectedMessages.forEach{id->runCatching{context.contentResolver.delete(Uri.parse("content://sms/$id"),null,null)}};selectedMessages=emptySet()}){Icon(Icons.Default.Delete,"Supprimer",tint=Color(0xFFFF453A))}
+                IconButton(onClick={val t=messages.filter{selectedMessages.contains(it.id)}.joinToString("\n"){it.body};if(copyTextToClipboard(context,t))Toast.makeText(context,"Message(s) copié(s)",Toast.LENGTH_SHORT).show() else Toast.makeText(context,"Copie impossible",Toast.LENGTH_SHORT).show()}){Icon(Icons.Default.ContentCopy,"Copier",tint=iBlue)}
+                IconButton(onClick={val t=messages.filter{selectedMessages.contains(it.id)}.joinToString("\n"){it.body};shareTextWithChooser(context,t)}){Icon(Icons.Default.Share,"Partager",tint=iBlue)}
+                IconButton(onClick={val count=deleteSmsByIds(context,selectedMessages);selectedMessages=emptySet();Toast.makeText(context,if(count>0)"$count message(s) supprimé(s)" else "Suppression impossible : définis ORION comme application SMS par défaut",Toast.LENGTH_LONG).show()}){Icon(Icons.Default.Delete,"Supprimer",tint=Color(0xFFFF453A))}
             }
         }
         if(item.address.isBlank()){
@@ -610,5 +610,33 @@ private fun readThreads(ctx:Context):List<ThreadItem>{
     }}catch(_:Exception){}
     return out
 }
-private fun senderLabel(address:String):String=if(address.trim().equals("BCB",ignoreCase=true)) "Connect" else address
+
+private fun copyTextToClipboard(ctx:Context,text:String):Boolean{
+    if(text.isBlank())return false
+    val clipboard=ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager ?: return false
+    clipboard.setPrimaryClip(ClipData.newPlainText("ORION Messages",text))
+    return true
+}
+private fun deleteSmsByIds(ctx:Context,ids:Set<Long>):Int{
+    if(Telephony.Sms.getDefaultSmsPackage(ctx)!=ctx.packageName)return 0
+    var deleted=0
+    ids.forEach{id->deleted+=runCatching{ctx.contentResolver.delete(Uri.parse("content://sms/$id"),null,null)}.getOrDefault(0)}
+    return deleted
+}
+private fun deleteConversation(ctx:Context,address:String):Int{
+    if(Telephony.Sms.getDefaultSmsPackage(ctx)!=ctx.packageName)return 0
+    val ids=mutableListOf<Long>()
+    runCatching{ctx.contentResolver.query(Telephony.Sms.CONTENT_URI,arrayOf(Telephony.Sms._ID,Telephony.Sms.ADDRESS),null,null,null)?.use{c->
+        val idCol=c.getColumnIndex(Telephony.Sms._ID);val addrCol=c.getColumnIndex(Telephony.Sms.ADDRESS)
+        while(c.moveToNext()){val addr=if(addrCol>=0)c.getString(addrCol).orEmpty() else "";if(normalizePhone(addr)==normalizePhone(address)&&idCol>=0)ids.add(c.getLong(idCol))}
+    }}
+    return deleteSmsByIds(ctx,ids.toSet())
+}
+private fun shareTextWithChooser(ctx:Context,text:String){
+    if(text.isBlank())return
+    val intent=Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,text)
+    runCatching{ctx.startActivity(Intent.createChooser(intent,"Choisir WhatsApp, WhatsApp Business ou une autre application"))}
+}
+
+private fun senderLabel(address:String):String=if(address.trim().equals("PCB",ignoreCase=true)||address.trim().equals("BCB",ignoreCase=true)) "Connect" else address
 private fun normalizePhone(value:String):String=value.filter{it.isDigit()}

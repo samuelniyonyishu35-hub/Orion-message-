@@ -37,6 +37,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -215,7 +216,7 @@ class MainActivity:ComponentActivity(){
                     page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,dark,{dark=it},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},setDefault,{page="about"})
                     page=="about" -> AboutScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted)
                     page=="profile" && thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),thread!!,contacts,ink,muted,surface,ctx,call,{page="chat"},{message->status=message})
-                    thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,conversations,contacts,query,{query=it},
+                    thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,conversations,contacts,query,{query=it},
                         {item->thread=item;number=item.address;page="chat";status=""},
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
                     else -> ChatScreen(Modifier.fillMaxSize().padding(pad).imePadding(),thread!!,messages,appFont,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
@@ -257,7 +258,8 @@ class MainActivity:ComponentActivity(){
     }
 }
 
-@Composable private fun HomeScreen(mod:Modifier,surface:Color,ink:Color,muted:Color,threads:List<ThreadItem>,contacts:List<ContactItem>,query:String,onQuery:(String)->Unit,onOpen:(ThreadItem)->Unit,onContact:(ContactItem)->Unit){
+@OptIn(ExperimentalFoundationApi::class)
+@Composable private fun HomeScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,threads:List<ThreadItem>,contacts:List<ContactItem>,query:String,onQuery:(String)->Unit,onOpen:(ThreadItem)->Unit,onContact:(ContactItem)->Unit){
     var selectedThreads by remember{mutableStateOf(setOf<String>())}
     val normalizedQuery=query.filter{it.isDigit()}
     val matchingThreads=threads.filter{
@@ -323,6 +325,7 @@ class MainActivity:ComponentActivity(){
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable private fun ChatScreen(mod:Modifier,item:ThreadItem,messages:List<SmsRecord>,font:FontFamily,number:String,onNumber:(String)->Unit,draft:String,onDraft:(String)->Unit,status:String,photoUri:Uri?,photoPreview:ImageBitmap?,onPickPhoto:()->Unit,onTakePhoto:()->Unit,onRemovePhoto:()->Unit,onSendPhoto:(Uri)->Unit,ink:Color,muted:Color,surface:Color,onProfile:()->Unit,onCall:()->Unit,onSend:()->Unit){
     val context=LocalContext.current
     var selectedMessages by remember{mutableStateOf(setOf<Long>())}

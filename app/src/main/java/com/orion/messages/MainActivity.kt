@@ -258,7 +258,7 @@ class MainActivity:ComponentActivity(){
         }
         HorizontalDivider(color=muted.copy(alpha=.3f))
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(surface).clickable{
-            val result=runCatching{if(blocked)BlockedNumberContract.unblock(ctx,number) else BlockedNumberContract.block(ctx,number);blocked=!blocked;onBlockResult(blocked)}.isSuccess
+            val result=runCatching{if(blocked){BlockedNumberContract.unblock(ctx,number)}else{ctx.contentResolver.insert(BlockedNumberContract.BlockedNumbers.CONTENT_URI,android.content.ContentValues().apply{put(BlockedNumberContract.BlockedNumbers.COLUMN_ORIGINAL_NUMBER,number)})};blocked=!blocked;onBlockResult(blocked)}.isSuccess
             if(!result)onBlockResult(blocked)
         }.padding(16.dp),verticalAlignment=Alignment.CenterVertically){
             Icon(if(blocked)Icons.Default.CheckCircle else Icons.Default.Block,null,tint=if(blocked)Color(0xFF34C759) else Color(0xFFFF453A))

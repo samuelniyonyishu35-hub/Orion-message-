@@ -1,6 +1,7 @@
 package com.orion.messages
 
 import android.Manifest
+import android.app.Activity
 import android.annotation.SuppressLint
 import android.app.role.RoleManager
 import android.content.ClipData
@@ -44,6 +45,9 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -139,11 +143,20 @@ class MainActivity:ComponentActivity(){
     val surface=if(dark)Color(0xFF1C1C1E) else Color.White
     val ink=if(dark)Color.White else Color(0xFF111114)
     val muted=if(dark)Color(0xFF98989D) else iGray
+    SideEffect {
+        (ctx as? Activity)?.window?.let { window ->
+            window.statusBarColor=bg.toArgb()
+            window.navigationBarColor=bg.toArgb()
+            val bars=WindowInsetsControllerCompat(window,window.decorView)
+            bars.isAppearanceLightStatusBars=!dark
+            bars.isAppearanceLightNavigationBars=!dark
+        }
+    }
     MaterialTheme(colorScheme=if(dark)darkColorScheme(primary=iBlue,background=bg,surface=surface) else lightColorScheme(primary=iBlue,background=bg,surface=surface)){
         Scaffold(containerColor=bg,topBar={
-            when {
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) { when {
                 page=="settings" -> TopAppBar(title={Text("Réglages",fontSize=28.sp,fontWeight=FontWeight.Bold,color=ink)},navigationIcon={IconButton(onClick={page="home"}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
-                page=="about" -> TopAppBar(title={Text("À propos",fontSize=20.sp,fontWeight=FontWeight.SemiBold,color=ink)},navigationIcon={IconButton(onClick={page="home"}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
+                page=="about" -> TopAppBar(title={Text("À propos",fontSize=20.sp,fontWeight=FontWeight.SemiBold,color=ink)},navigationIcon={IconButton(onClick={page="settings"}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
                 page=="profile" -> TopAppBar(title={Text("Informations",fontSize=20.sp,fontWeight=FontWeight.SemiBold,color=ink)},navigationIcon={IconButton(onClick={page="chat"}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
                 thread!=null -> TopAppBar(
                     title={Row(Modifier.fillMaxWidth().clickable{page="profile"}.padding(vertical=2.dp),verticalAlignment=Alignment.CenterVertically){
@@ -160,17 +173,16 @@ class MainActivity:ComponentActivity(){
                             IconButton(onClick={overflowExpanded=true}){Icon(Icons.Default.MoreVert,"Menu",tint=iBlue)}
                             DropdownMenu(expanded=overflowExpanded,onDismissRequest={overflowExpanded=false}){
                                 DropdownMenuItem(text={Text("Réglages")},leadingIcon={Icon(Icons.Default.Settings,null)},onClick={overflowExpanded=false;page="settings"})
-                                DropdownMenuItem(text={Text("À propos")},leadingIcon={Icon(Icons.Default.Info,null)},onClick={overflowExpanded=false;page="about"})
                             }
                         }
                     },
                     colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
-            }
+            } }
         },floatingActionButton={if(page=="home"&&thread==null)FloatingActionButton(onClick={number="";draft="";thread=ThreadItem("","",0,"Nouveau message");page="chat";status=""},containerColor=iBlue,contentColor=Color.White,shape=CircleShape){Icon(Icons.Default.Edit,"Nouveau message")}}
         ){pad->
             AnimatedContent(targetState=page+if(thread!=null)"-thread" else "",label="orion-page"){screen->
                 when {
-                    page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,dark,{dark=it},sims,sim,{sim=it},setDefault)
+                    page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,dark,{dark=it},sims,sim,{sim=it},setDefault,{page="about"})
                     page=="about" -> AboutScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted)
                     page=="profile" && thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),thread!!,contacts,ink,muted,surface,ctx,call,{message->status=message})
                     thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,conversations,contacts,query,{query=it},
@@ -261,7 +273,7 @@ class MainActivity:ComponentActivity(){
                     Column(Modifier.weight(1f)){
                         Text(item.displayName,color=ink,fontSize=16.sp,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)
                         Spacer(Modifier.height(3.dp));Text(item.body.ifBlank{"Message de ${item.displayName}"},color=muted,fontSize=14.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
-                        Text("Source : ${item.address}",color=muted.copy(alpha=.82f),fontSize=10.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        Text("Source : ${senderLabel(item.address)}",color=muted.copy(alpha=.82f),fontSize=10.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                     }
                     Icon(Icons.Default.ChevronRight,null,tint=muted)
                 }
@@ -372,7 +384,7 @@ class MainActivity:ComponentActivity(){
     }
 }
 
-@Composable private fun SettingsScreen(mod:Modifier,surface:Color,ink:Color,muted:Color,dark:Boolean,onDark:(Boolean)->Unit,sims:List<SimChoice>,selected:Int,onSim:(Int)->Unit,onDefault:()->Unit){
+@Composable private fun SettingsScreen(mod:Modifier,surface:Color,ink:Color,muted:Color,dark:Boolean,onDark:(Boolean)->Unit,sims:List<SimChoice>,selected:Int,onSim:(Int)->Unit,onDefault:()->Unit,onAbout:()->Unit){
     Column(mod.padding(horizontal=16.dp)){
         Spacer(Modifier.height(16.dp));SectionTitle("APPLICATION",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
@@ -391,6 +403,8 @@ class MainActivity:ComponentActivity(){
         }
         Spacer(Modifier.height(22.dp));SectionTitle("APPARENCE",muted)
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp),verticalAlignment=Alignment.CenterVertically){Text("Mode sombre",color=ink,modifier=Modifier.weight(1f));Switch(dark,onDark)}
+        Spacer(Modifier.height(22.dp));SectionTitle("À PROPOS",muted)
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).clickable(onClick=onAbout).padding(16.dp),verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.Info,null,tint=iBlue);Spacer(Modifier.width(12.dp));Text("À propos d’ORION",color=ink,modifier=Modifier.weight(1f));Icon(Icons.Default.ChevronRight,null,tint=muted)}
         Spacer(Modifier.height(22.dp));SectionTitle("CONFIDENTIALITÉ",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
             Text("Noms de tes contacts",color=ink,fontWeight=FontWeight.SemiBold)
@@ -455,8 +469,9 @@ private fun readThreads(ctx:Context):List<ThreadItem>{
     val out=mutableListOf<ThreadItem>()
     try{ctx.contentResolver.query(Telephony.Sms.CONTENT_URI,arrayOf(Telephony.Sms.ADDRESS,Telephony.Sms.BODY,Telephony.Sms.DATE),null,null,Telephony.Sms.DATE+" DESC")?.use{c->
         val ai=c.getColumnIndex(Telephony.Sms.ADDRESS);val bi=c.getColumnIndex(Telephony.Sms.BODY);val di=c.getColumnIndex(Telephony.Sms.DATE);val seen=mutableSetOf<String>()
-        while(c.moveToNext()&&out.size<100){val a=if(ai>=0)c.getString(ai)?:"Inconnu" else "Inconnu";if(seen.add(a))out.add(ThreadItem(a,if(bi>=0)c.getString(bi)?:"" else "",if(di>=0)c.getLong(di) else 0L,names[normalizePhone(a)]?:a))}
+        while(c.moveToNext()&&out.size<100){val a=if(ai>=0)c.getString(ai)?:"Inconnu" else "Inconnu";if(seen.add(a))out.add(ThreadItem(a,if(bi>=0)c.getString(bi)?:"" else "",if(di>=0)c.getLong(di) else 0L,names[normalizePhone(a)]?:senderLabel(a)))}
     }}catch(_:Exception){}
     return out
 }
+private fun senderLabel(address:String):String=if(address.trim().equals("BCB",ignoreCase=true)) "Connect" else address
 private fun normalizePhone(value:String):String=value.filter{it.isDigit()}

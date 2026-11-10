@@ -43,6 +43,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 private val iBlue = Color(0xFF087CFA)
 private val iGray = Color(0xFF8E8E93)
@@ -69,8 +72,19 @@ class MainActivity:ComponentActivity(){
         Toast.makeText(this,if(ok)"ORION est l'application SMS par défaut" else "Choix non confirmé",Toast.LENGTH_LONG).show()
     }
     override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState)
+        enableOrionImmersiveMode()
         permissions.launch(arrayOf(Manifest.permission.READ_SMS,Manifest.permission.SEND_SMS,Manifest.permission.RECEIVE_SMS,Manifest.permission.READ_PHONE_STATE,Manifest.permission.READ_CONTACTS))
         setContent{OrionApp(this,tick,{tick++},::makeDefault,::call,::send)}
+    }
+    override fun onWindowFocusChanged(hasFocus:Boolean){
+        super.onWindowFocusChanged(hasFocus)
+        if(hasFocus) enableOrionImmersiveMode()
+    }
+    private fun enableOrionImmersiveMode(){
+        WindowCompat.setDecorFitsSystemWindows(window,false)
+        val controller=WindowInsetsControllerCompat(window,window.decorView)
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        controller.systemBarsBehavior=WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
     private fun makeDefault(){
         try{if(Build.VERSION.SDK_INT>=29){val r=getSystemService(RoleManager::class.java)
@@ -105,6 +119,7 @@ class MainActivity:ComponentActivity(){
     var draft by remember{mutableStateOf("")}
     var status by remember{mutableStateOf("")}
     var selectedContact by remember{mutableStateOf<ContactItem?>(null)}
+    var overflowExpanded by remember{mutableStateOf(false)}
     var sim by remember{mutableIntStateOf(SubscriptionManager.INVALID_SUBSCRIPTION_ID)}
     val sims=remember(tick){readSims(ctx)}
     val conversations=remember(tick){readThreads(ctx)}
@@ -118,6 +133,7 @@ class MainActivity:ComponentActivity(){
         Scaffold(containerColor=bg,topBar={
             when {
                 page=="settings" -> TopAppBar(title={Text("Réglages",fontSize=28.sp,fontWeight=FontWeight.Bold,color=ink)},navigationIcon={IconButton(onClick={page="home"}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
+                page=="about" -> TopAppBar(title={Text("À propos",fontSize=20.sp,fontWeight=FontWeight.SemiBold,color=ink)},navigationIcon={IconButton(onClick={page="home"}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
                 page=="profile" -> TopAppBar(title={Text("Informations",fontSize=20.sp,fontWeight=FontWeight.SemiBold,color=ink)},navigationIcon={IconButton(onClick={page="chat"}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
                 thread!=null -> TopAppBar(
                     title={Row(Modifier.fillMaxWidth().clickable{page="profile"}.padding(vertical=2.dp),verticalAlignment=Alignment.CenterVertically){
@@ -129,7 +145,15 @@ class MainActivity:ComponentActivity(){
                     actions={IconButton(onClick={call(thread!!.address.ifBlank{number})}){Icon(Icons.Default.Call,"Appeler",tint=iBlue)}},
                     colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
                 else -> TopAppBar(title={Column{Text("Messages",fontSize=30.sp,fontWeight=FontWeight.Bold,color=ink,letterSpacing=(-.8).sp);Text("ORION",fontSize=10.sp,color=muted,letterSpacing=2.sp)}},
-                    actions={IconButton(onClick={page="settings"}){Icon(Icons.Default.Settings,null,tint=iBlue)}},
+                    actions={
+                        Box{
+                            IconButton(onClick={overflowExpanded=true}){Icon(Icons.Default.MoreVert,"Menu",tint=iBlue)}
+                            DropdownMenu(expanded=overflowExpanded,onDismissRequest={overflowExpanded=false}){
+                                DropdownMenuItem(text={Text("Réglages")},leadingIcon={Icon(Icons.Default.Settings,null)},onClick={overflowExpanded=false;page="settings"})
+                                DropdownMenuItem(text={Text("À propos")},leadingIcon={Icon(Icons.Default.Info,null)},onClick={overflowExpanded=false;page="about"})
+                            }
+                        }
+                    },
                     colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
             }
         },floatingActionButton={if(page=="home"&&thread==null)FloatingActionButton(onClick={number="";draft="";thread=ThreadItem("","",0,"Nouveau message");page="chat";status=""},containerColor=iBlue,contentColor=Color.White,shape=CircleShape){Icon(Icons.Default.Edit,"Nouveau message")}}
@@ -137,6 +161,7 @@ class MainActivity:ComponentActivity(){
             AnimatedContent(targetState=page+if(thread!=null)"-thread" else "",label="orion-page"){screen->
                 when {
                     page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,dark,{dark=it},sims,sim,{sim=it},setDefault)
+                    page=="about" -> AboutScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted)
                     page=="profile" && thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),thread!!,contacts,ink,muted,surface,ctx,call,{message->status=message})
                     thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,conversations,contacts,query,{query=it},
                         {item->thread=item;number=item.address;page="chat";status=""},
@@ -206,7 +231,8 @@ class MainActivity:ComponentActivity(){
                     Avatar(item.displayName,50);Spacer(Modifier.width(13.dp))
                     Column(Modifier.weight(1f)){
                         Text(item.displayName,color=ink,fontSize=16.sp,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)
-                        Spacer(Modifier.height(4.dp));Text(item.body.ifBlank{item.address},color=muted,fontSize=14.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(3.dp));Text(item.body.ifBlank{"Message de ${item.displayName}"},color=muted,fontSize=14.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        Text("Source : ${item.address}",color=muted.copy(alpha=.82f),fontSize=10.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                     }
                     Icon(Icons.Default.ChevronRight,null,tint=muted)
                 }
@@ -329,6 +355,36 @@ class MainActivity:ComponentActivity(){
             Text("Noms de tes contacts",color=ink,fontWeight=FontWeight.SemiBold)
             Text("ORION utilise l'autorisation Contacts pour associer les numéros aux noms enregistrés dans ton carnet d'adresses.",color=muted,fontSize=12.sp)
         }
+    }
+}
+@Composable private fun AboutScreen(mod:Modifier,surface:Color,ink:Color,muted:Color){
+    Column(mod.padding(horizontal=20.dp),horizontalAlignment=Alignment.CenterHorizontally){
+        Spacer(Modifier.height(38.dp))
+        Box(Modifier.size(94.dp).clip(RoundedCornerShape(26.dp)).background(Brush.linearGradient(listOf(Color(0xFF68A8FF),Color(0xFF0756C9)))),contentAlignment=Alignment.Center){
+            Icon(Icons.Default.Sms,null,tint=Color.White,modifier=Modifier.size(48.dp))
+        }
+        Spacer(Modifier.height(18.dp))
+        Text("ORION Messages",fontSize=25.sp,fontWeight=FontWeight.Bold,color=ink)
+        Text("Messagerie SMS Android",fontSize=14.sp,color=muted)
+        Spacer(Modifier.height(26.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(18.dp)){
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                Text("Version",color=ink,modifier=Modifier.weight(1f))
+                Text(BuildConfig.VERSION_NAME,color=muted,fontWeight=FontWeight.SemiBold)
+            }
+            HorizontalDivider(Modifier.padding(vertical=13.dp),color=muted.copy(alpha=.25f))
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                Text("Application",color=ink,modifier=Modifier.weight(1f))
+                Text("ORION",color=muted)
+            }
+            HorizontalDivider(Modifier.padding(vertical=13.dp),color=muted.copy(alpha=.25f))
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                Text("Type",color=ink,modifier=Modifier.weight(1f))
+                Text("SMS classiques via carte SIM",color=muted,fontSize=12.sp)
+            }
+        }
+        Spacer(Modifier.height(20.dp))
+        Text("ORION Messages — une messagerie conçue pour Android.",color=muted,fontSize=12.sp)
     }
 }
 @Composable private fun SectionTitle(value:String,color:Color){Text(value,color=color,fontSize=11.sp,fontWeight=FontWeight.Bold,letterSpacing=1.3.sp);Spacer(Modifier.height(9.dp))}

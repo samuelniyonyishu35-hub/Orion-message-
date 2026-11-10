@@ -192,7 +192,7 @@ class MainActivity:ComponentActivity(){
                         {item->thread=item;number=item.address;page="chat";status=""},
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
                     else -> ChatScreen(Modifier.fillMaxSize().padding(pad),thread!!,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
-                        {photoPicker.launch("image/*")},{photoUri=null},{uri->
+                        {photoPicker.launch("image/*")},{cameraPicker.launch(null)},{photoUri=null},{uri->
                             val dest=thread!!.address.ifBlank{number}.trim()
                             if(dest.isBlank())status="Saisis le numéro du destinataire avant de joindre une photo."
                             else try{
@@ -209,7 +209,7 @@ class MainActivity:ComponentActivity(){
                                 photoUri=null
                                 status="Photo ouverte dans l'application de messagerie. Appuie sur Envoyer pour transmettre le MMS."
                             }catch(e:Exception){status="Impossible d'ouvrir l'envoi MMS : ${e.localizedMessage ?: "application compatible introuvable"}"}
-                        },{cameraPicker.launch(null)},ink,muted,surface,
+                        },ink,muted,surface,
                         {page="profile"},{call(thread!!.address.ifBlank{number})},{
                             val dest=thread!!.address.ifBlank{number}.trim()
                             if(photoUri!=null)status="Utilise le bouton Envoyer pour joindre la photo."

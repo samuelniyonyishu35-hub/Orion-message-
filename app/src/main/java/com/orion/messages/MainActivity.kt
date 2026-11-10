@@ -3,10 +3,12 @@ package com.orion.messages
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.role.RoleManager
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Bundle
 import android.provider.Telephony
@@ -17,9 +19,11 @@ import android.telephony.SubscriptionManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -36,6 +40,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -117,6 +124,9 @@ class MainActivity:ComponentActivity(){
     var query by remember{mutableStateOf("")}
     var number by remember{mutableStateOf("")}
     var draft by remember{mutableStateOf("")}
+    var photoUri by remember{mutableStateOf<Uri?>(null)}
+    val photoPicker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->photoUri=uri}
+    val photoPreview=remember(photoUri){photoUri?.let{uri->runCatching{ctx.contentResolver.openInputStream(uri)?.use{stream->BitmapFactory.decodeStream(stream)?.asImageBitmap()}}.getOrNull()}}
     var status by remember{mutableStateOf("")}
     var selectedContact by remember{mutableStateOf<ContactItem?>(null)}
     var overflowExpanded by remember{mutableStateOf(false)}
@@ -166,10 +176,29 @@ class MainActivity:ComponentActivity(){
                     thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,conversations,contacts,query,{query=it},
                         {item->thread=item;number=item.address;page="chat";status=""},
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
-                    else -> ChatScreen(Modifier.fillMaxSize().padding(pad),thread!!,number,{number=it},draft,{draft=it},status,ink,muted,surface,
+                    else -> ChatScreen(Modifier.fillMaxSize().padding(pad),thread!!,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
+                        {photoPicker.launch("image/*")},{photoUri=null},{uri->
+                            val dest=thread!!.address.ifBlank{number}.trim()
+                            if(dest.isBlank())status="Saisis le numéro du destinataire avant de joindre une photo."
+                            else try{
+                                val share=Intent(Intent.ACTION_SEND).apply{
+                                    type="image/*"
+                                    putExtra(Intent.EXTRA_STREAM,uri)
+                                    putExtra(Intent.EXTRA_TEXT,draft)
+                                    putExtra("address",dest)
+                                    putExtra("sms_body",draft)
+                                    clipData=ClipData.newUri(ctx.contentResolver,"Photo ORION",uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                ctx.startActivity(Intent.createChooser(share,"Envoyer la photo par MMS"))
+                                photoUri=null
+                                status="Photo ouverte dans l'application de messagerie. Appuie sur Envoyer pour transmettre le MMS."
+                            }catch(e:Exception){status="Impossible d'ouvrir l'envoi MMS : ${e.localizedMessage ?: "application compatible introuvable"}"}
+                        },ink,muted,surface,
                         {page="profile"},{call(thread!!.address.ifBlank{number})},{
                             val dest=thread!!.address.ifBlank{number}.trim()
-                            if(dest.isBlank())status="Saisis le numéro du destinataire."
+                            if(photoUri!=null)status="Utilise le bouton Envoyer pour joindre la photo."
+                            else if(dest.isBlank())status="Saisis le numéro du destinataire."
                             else if(draft.isBlank())status="Écris un message."
                             else send(dest,draft.trim(),sim.takeIf{it!=SubscriptionManager.INVALID_SUBSCRIPTION_ID}){result->status=result;if(result.startsWith("SMS transmis")){draft="";thread=ThreadItem(dest,"SMS envoyé depuis ORION",System.currentTimeMillis(),thread!!.displayName);refresh()}}
                         })
@@ -242,7 +271,7 @@ class MainActivity:ComponentActivity(){
     }
 }
 
-@Composable private fun ChatScreen(mod:Modifier,item:ThreadItem,number:String,onNumber:(String)->Unit,draft:String,onDraft:(String)->Unit,status:String,ink:Color,muted:Color,surface:Color,onProfile:()->Unit,onCall:()->Unit,onSend:()->Unit){
+@Composable private fun ChatScreen(mod:Modifier,item:ThreadItem,number:String,onNumber:(String)->Unit,draft:String,onDraft:(String)->Unit,status:String,photoUri:Uri?,photoPreview:ImageBitmap?,onPickPhoto:()->Unit,onRemovePhoto:()->Unit,onSendPhoto:(Uri)->Unit,ink:Color,muted:Color,surface:Color,onProfile:()->Unit,onCall:()->Unit,onSend:()->Unit){
     Column(mod.padding(horizontal=14.dp)){
         if(item.address.isBlank()){
             Row(Modifier.fillMaxWidth().padding(top=8.dp,bottom=8.dp),verticalAlignment=Alignment.CenterVertically){
@@ -265,14 +294,26 @@ class MainActivity:ComponentActivity(){
                 Text(if(item.address.isBlank())"Nouveau message" else item.address,color=muted,fontSize=13.sp)
             }
         }
+        if(photoUri!=null){
+            Row(Modifier.fillMaxWidth().padding(bottom=9.dp).clip(RoundedCornerShape(16.dp)).background(surface).padding(9.dp),verticalAlignment=Alignment.CenterVertically){
+                if(photoPreview!=null)Image(photoPreview,contentDescription="Aperçu de la photo",modifier=Modifier.size(68.dp).clip(RoundedCornerShape(11.dp)),contentScale=ContentScale.Crop)
+                else Box(Modifier.size(68.dp).clip(RoundedCornerShape(11.dp)).background(muted.copy(alpha=.2f)),contentAlignment=Alignment.Center){Icon(Icons.Default.Image,null,tint=muted)}
+                Spacer(Modifier.width(11.dp))
+                Column(Modifier.weight(1f)){Text("Photo jointe",color=ink,fontWeight=FontWeight.SemiBold,fontSize=14.sp);Text("Prête à être envoyée par MMS",color=muted,fontSize=11.sp)}
+                IconButton(onClick=onRemovePhoto){Icon(Icons.Default.Close,"Retirer la photo",tint=muted)}
+            }
+        }
         if(status.isNotBlank())Text(status,color=muted,fontSize=11.sp,modifier=Modifier.padding(horizontal=5.dp,vertical=5.dp))
         HorizontalDivider(color=muted.copy(alpha=.25f))
         Row(Modifier.fillMaxWidth().padding(top=10.dp,bottom=8.dp),verticalAlignment=Alignment.Bottom){
-            IconButton(onClick={},modifier=Modifier.size(42.dp).clip(CircleShape).background(surface)){Icon(Icons.Default.Add,null,tint=muted)}
-            Spacer(Modifier.width(6.dp))
-            Row(Modifier.weight(1f).clip(RoundedCornerShape(23.dp)).background(surface).padding(start=15.dp,end=7.dp,top=5.dp,bottom=5.dp),verticalAlignment=Alignment.CenterVertically){
-                BasicTextField(value=draft,onValueChange=onDraft,modifier=Modifier.weight(1f).heightIn(min=34.dp,max=112.dp).padding(vertical=7.dp),textStyle=TextStyle(color=ink,fontSize=16.sp,lineHeight=21.sp),decorationBox={inner->if(draft.isEmpty())Text("SMS · Message texte",color=muted,fontSize=15.sp);inner()})
-                IconButton(onClick=onSend,enabled=draft.isNotBlank(),modifier=Modifier.size(34.dp).clip(CircleShape).background(if(draft.isNotBlank())iBlue else muted.copy(alpha=.25f))){Icon(Icons.Default.ArrowUpward,null,tint=Color.White,modifier=Modifier.size(19.dp))}
+            IconButton(onClick=onPickPhoto,modifier=Modifier.size(44.dp).clip(CircleShape).background(surface)){Icon(Icons.Default.AddPhotoAlternate,"Joindre une photo",tint=iBlue,modifier=Modifier.size(23.dp))}
+            Spacer(Modifier.width(7.dp))
+            Row(Modifier.weight(1f).clip(RoundedCornerShape(23.dp)).background(surface).padding(start=15.dp,end=6.dp,top=5.dp,bottom=5.dp),verticalAlignment=Alignment.CenterVertically){
+                BasicTextField(value=draft,onValueChange=onDraft,modifier=Modifier.weight(1f).heightIn(min=36.dp,max=112.dp).padding(vertical=7.dp),textStyle=TextStyle(color=ink,fontSize=16.sp,lineHeight=21.sp),decorationBox={inner->if(draft.isEmpty())Text("SMS · Message texte",color=muted,fontSize=15.sp);inner()})
+            }
+            Spacer(Modifier.width(8.dp))
+            IconButton(onClick={if(photoUri!=null)onSendPhoto(photoUri) else onSend()},enabled=draft.isNotBlank()||photoUri!=null,modifier=Modifier.size(46.dp).clip(CircleShape).background(if(draft.isNotBlank()||photoUri!=null)iBlue else muted.copy(alpha=.28f))){
+                Icon(Icons.Default.Send,"Envoyer",tint=Color.White,modifier=Modifier.size(22.dp))
             }
         }
     }

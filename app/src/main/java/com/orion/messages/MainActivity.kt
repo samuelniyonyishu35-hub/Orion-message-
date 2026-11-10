@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -114,7 +113,7 @@ class MainActivity:ComponentActivity(){
             Box(Modifier.size(70.dp).clip(CircleShape).background(Blue.copy(alpha=.12f)),contentAlignment=Alignment.Center){Icon(Icons.Default.Sms,null,tint=Blue,modifier=Modifier.size(34.dp))}
             Spacer(Modifier.height(14.dp));Text("Aucun message",fontWeight=FontWeight.SemiBold,color=ink,fontSize=18.sp);Text("Touchez + pour commencer une conversation.",color=muted,fontSize=13.sp)
         }}else LazyColumn(contentPadding=PaddingValues(bottom=90.dp)){
-            items(threads.filter{query.isBlank()||it.address.contains(query,true)||it.body.contains(query,true)}){item->
+            items(threads.filter{query.isBlank()||it.address.contains(query,true)||it.displayName.contains(query,true)||it.body.contains(query,true)}){item->
                 Row(Modifier.fillMaxWidth().clickable{onOpen(item)}.padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
                     Box(Modifier.size(52.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Color(0xFF7BAAFF),Color(0xFF3769D8)))),contentAlignment=Alignment.Center){Text(item.address.takeLast(1).uppercase(),color=Color.White,fontSize=21.sp,fontWeight=FontWeight.Bold)}
                     Spacer(Modifier.width(13.dp));Column(Modifier.weight(1f)){Text(item.displayName,color=ink,fontSize=16.sp,fontWeight=FontWeight.SemiBold);Spacer(Modifier.height(4.dp));Text(item.body,color=muted,fontSize=14.sp,maxLines=1)}
@@ -136,7 +135,7 @@ class MainActivity:ComponentActivity(){
                 Text("SMS",color=muted,fontSize=10.sp,modifier=Modifier.padding(top=5.dp,end=6.dp))
             }else Column(Modifier.fillMaxWidth().padding(bottom=25.dp),horizontalAlignment=Alignment.CenterHorizontally){
                 Box(Modifier.size(65.dp).clip(CircleShape).background(surface),contentAlignment=Alignment.Center){Icon(Icons.Default.Person,null,tint=Blue,modifier=Modifier.size(31.dp))}
-                Spacer(Modifier.height(10.dp));Text(if(item.address.isBlank())"Nouveau message" else item.address,color=ink,fontWeight=FontWeight.SemiBold);Text("SMS · ORION Messages",color=muted,fontSize=12.sp)
+                Spacer(Modifier.height(10.dp));Text(if(item.address.isBlank())"Nouveau message" else item.displayName,color=ink,fontWeight=FontWeight.SemiBold);Text("SMS · ORION Messages",color=muted,fontSize=12.sp)
             }
         }
         if(status.isNotBlank())Text(status,color=muted,fontSize=11.sp,modifier=Modifier.padding(6.dp))

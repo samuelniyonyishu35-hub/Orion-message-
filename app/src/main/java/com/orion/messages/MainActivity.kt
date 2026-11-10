@@ -18,6 +18,9 @@ import android.provider.BlockedNumberContract
 import android.provider.MediaStore
 import android.media.MediaRecorder
 import android.content.ContentValues
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import android.app.PendingIntent
 import android.app.Activity
 import androidx.compose.ui.platform.LocalContext
@@ -78,6 +81,7 @@ data class SimChoice(val id:Int,val slot:Int,val label:String)
 
 class MainActivity:ComponentActivity(){
     private var tick by mutableIntStateOf(0)
+    private val smsObserver=object:ContentObserver(Handler(Looper.getMainLooper())){override fun onChange(selfChange:Boolean,uri:Uri?){tick++}}
     private var pendingCallNumber:String?=null
     private val callPermission=registerForActivityResult(ActivityResultContracts.RequestPermission()){granted->
         val target=pendingCallNumber
@@ -96,6 +100,8 @@ class MainActivity:ComponentActivity(){
         permissions.launch(arrayOf(Manifest.permission.READ_SMS,Manifest.permission.SEND_SMS,Manifest.permission.RECEIVE_SMS,Manifest.permission.READ_PHONE_STATE,Manifest.permission.READ_CONTACTS))
         setContent{OrionApp(this,tick,{tick++},::makeDefault,::call,::send)}
     }
+    override fun onResume(){super.onResume();runCatching{contentResolver.registerContentObserver(Telephony.Sms.CONTENT_URI,true,smsObserver)};tick++}
+    override fun onPause(){runCatching{contentResolver.unregisterContentObserver(smsObserver)};super.onPause()}
     override fun onWindowFocusChanged(hasFocus:Boolean){
         super.onWindowFocusChanged(hasFocus)
         if(hasFocus) showSystemBars()
@@ -139,7 +145,7 @@ class MainActivity:ComponentActivity(){
             val delivered=PendingIntent.getBroadcast(this,request+1,deliveredIntent,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val sms=if(Build.VERSION.SDK_INT>=31){val base=getSystemService(SmsManager::class.java);if(sim!=null)base.createForSubscriptionId(sim) else base}else{@Suppress("DEPRECATION") if(sim!=null)SmsManager.getSmsManagerForSubscriptionId(sim) else SmsManager.getDefault()}
             sms.sendTextMessage(to,null,body,sent,delivered)
-            done("Message envoyé : ${body}")
+            done("Message envoyé")
         }catch(e:Exception){done("Échec : ${e.localizedMessage ?: "vérifie la SIM, le réseau et l’application SMS par défaut"}")}
     }
 }

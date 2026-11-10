@@ -235,7 +235,7 @@ class MainActivity:ComponentActivity(){
                         Column { Text(thread!!.displayName,fontSize=17.sp,fontWeight=FontWeight.SemiBold,color=ink,maxLines=1,overflow=TextOverflow.Ellipsis);Text("touchez pour afficher le profil",fontSize=11.sp,color=muted) }
                     }},
                     navigationIcon={IconButton(onClick={thread=null;page="home";status=""}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},
-                    actions={IconButton(onClick={call(screen.thread!!.address.ifBlank{number})}){Icon(Icons.Default.Call,"Appeler",tint=iBlue)}},
+                    actions={IconButton(onClick={call(thread!!.address.ifBlank{number})}){Icon(Icons.Default.Call,"Appeler",tint=iBlue)}},
                     colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
                 else -> TopAppBar(title={Column{Text("Messages",fontSize=30.sp,fontWeight=FontWeight.Bold,color=ink,letterSpacing=(-.8).sp);Text("ORION",fontSize=10.sp,color=muted,letterSpacing=2.sp)}},
                     navigationIcon={IconButton(onClick={page="settings"}){Icon(Icons.Default.MoreVert,"Ouvrir les réglages",tint=iBlue)}},
@@ -268,7 +268,7 @@ class MainActivity:ComponentActivity(){
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
                     else -> ChatScreen(Modifier.fillMaxSize().padding(pad).imePadding(),screen.thread,screenMessages,appFont,appWeight,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
                         {photoPicker.launch("image/*")},{cameraPicker.launch(null)},{photoUri=null},{uri->
-                            val dest=thread!!.address.ifBlank{number}.trim()
+                            val dest=screen.thread!!.address.ifBlank{number}.trim()
                             if(dest.isBlank())status="Saisis le numéro du destinataire avant de joindre une photo."
                             else try{
                                 val share=Intent(Intent.ACTION_SEND).apply{
@@ -285,7 +285,7 @@ class MainActivity:ComponentActivity(){
                                 status="Photo ouverte dans l'application de messagerie. Appuie sur Envoyer pour transmettre le MMS."
                             }catch(e:Exception){status="Impossible d'ouvrir l'envoi MMS : ${e.localizedMessage ?: "application compatible introuvable"}"}
                         },ink,muted,surface,
-                        {page="profile"},{call(thread!!.address.ifBlank{number})},{
+                        {page="profile"},{call(screen.thread!!.address.ifBlank{number})},{
                             val dest=thread!!.address.ifBlank{number}.trim()
                             if(photoUri!=null)status="Utilise le bouton Envoyer pour joindre la photo."
                             else if(dest.isBlank())status="Saisis le numéro du destinataire."

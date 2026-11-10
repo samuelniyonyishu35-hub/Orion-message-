@@ -17,6 +17,8 @@ import android.provider.ContactsContract
 import android.provider.BlockedNumberContract
 import android.provider.MediaStore
 import android.media.MediaRecorder
+import android.content.ContentValues
+import androidx.compose.ui.platform.LocalContext
 import java.io.File
 import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
@@ -285,6 +287,36 @@ class MainActivity:ComponentActivity(){
 }
 
 @Composable private fun ChatScreen(mod:Modifier,item:ThreadItem,number:String,onNumber:(String)->Unit,draft:String,onDraft:(String)->Unit,status:String,photoUri:Uri?,photoPreview:ImageBitmap?,onPickPhoto:()->Unit,onRemovePhoto:()->Unit,onSendPhoto:(Uri)->Unit,ink:Color,muted:Color,surface:Color,onProfile:()->Unit,onCall:()->Unit,onSend:()->Unit){
+    val context=LocalContext.current
+    var recorder by remember{mutableStateOf<MediaRecorder?>(null)}
+    var recordingFile by remember{mutableStateOf<File?>(null)}
+    var recording by remember{mutableStateOf(false)}
+    fun startAudioRecording(){
+        try{
+            val file=File(context.cacheDir,"orion-audio-${System.currentTimeMillis()}.m4a")
+            val media=if(Build.VERSION.SDK_INT>=31)MediaRecorder(context) else @Suppress("DEPRECATION") MediaRecorder()
+            media.setAudioSource(MediaRecorder.AudioSource.MIC)
+            media.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            media.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            media.setOutputFile(file.absolutePath)
+            media.prepare();media.start();recorder=media;recordingFile=file;recording=true
+        }catch(e:Exception){Toast.makeText(context,"Impossible de démarrer l’enregistrement : ${e.localizedMessage}",Toast.LENGTH_LONG).show();recorder?.release();recorder=null;recording=false}
+    }
+    fun stopAndShareAudio(){
+        val file=recordingFile
+        try{recorder?.stop()}catch(_:Exception){}
+        recorder?.release();recorder=null;recording=false;recordingFile=null
+        if(file==null||!file.exists()||file.length()==0L){Toast.makeText(context,"Enregistrement audio vide.",Toast.LENGTH_SHORT).show();return}
+        try{
+            val values=ContentValues().apply{put(MediaStore.Audio.Media.DISPLAY_NAME,file.name);put(MediaStore.Audio.Media.MIME_TYPE,"audio/mp4");put(MediaStore.Audio.Media.RELATIVE_PATH,"Music/ORION")}
+            val uri=context.contentResolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,values) ?: throw IllegalStateException("Stockage audio indisponible")
+            context.contentResolver.openOutputStream(uri)?.use{out->file.inputStream().use{input->input.copyTo(out)}} ?: throw IllegalStateException("Impossible d’écrire le fichier audio")
+            val share=Intent(Intent.ACTION_SEND).apply{type="audio/mp4";putExtra(Intent.EXTRA_STREAM,uri);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)}
+            context.startActivity(Intent.createChooser(share,"Envoyer l’audio"))
+        }catch(e:Exception){Toast.makeText(context,"Partage audio impossible : ${e.localizedMessage}",Toast.LENGTH_LONG).show()}
+        file.delete()
+    }
+    val micPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){granted->if(granted)startAudioRecording() else Toast.makeText(context,"Autorisation du microphone refusée.",Toast.LENGTH_LONG).show()}
     Column(mod.padding(horizontal=14.dp)){
         if(item.address.isBlank()){
             Row(Modifier.fillMaxWidth().padding(top=8.dp,bottom=8.dp),verticalAlignment=Alignment.CenterVertically){
@@ -316,6 +348,7 @@ class MainActivity:ComponentActivity(){
                 IconButton(onClick=onRemovePhoto){Icon(Icons.Default.Close,"Retirer la photo",tint=muted)}
             }
         }
+        if(recording)Text("Enregistrement en cours… Touchez le bouton rouge pour terminer et partager.",color=Color(0xFFFF453A),fontSize=11.sp,modifier=Modifier.padding(horizontal=5.dp,vertical=5.dp))
         if(status.isNotBlank())Text(status,color=muted,fontSize=11.sp,modifier=Modifier.padding(horizontal=5.dp,vertical=5.dp))
         HorizontalDivider(color=muted.copy(alpha=.25f))
         Row(Modifier.fillMaxWidth().padding(top=10.dp,bottom=8.dp),verticalAlignment=Alignment.Bottom){
@@ -330,7 +363,11 @@ class MainActivity:ComponentActivity(){
             Row(Modifier.weight(1f).clip(RoundedCornerShape(23.dp)).background(surface).padding(start=15.dp,end=6.dp,top=5.dp,bottom=5.dp),verticalAlignment=Alignment.CenterVertically){
                 BasicTextField(value=draft,onValueChange=onDraft,modifier=Modifier.weight(1f).heightIn(min=36.dp,max=112.dp).padding(vertical=7.dp),textStyle=TextStyle(color=ink,fontSize=16.sp,lineHeight=21.sp),decorationBox={inner->if(draft.isEmpty())Text("SMS · Message texte",color=muted,fontSize=15.sp);inner()})
             }
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(4.dp))
+            IconButton(onClick={if(recording)stopAndShareAudio() else micPermission.launch(Manifest.permission.RECORD_AUDIO)},modifier=Modifier.size(42.dp).clip(CircleShape).background(if(recording)Color(0xFFFF3B30) else surface)){
+                Icon(if(recording)Icons.Default.Stop else Icons.Default.Mic,if(recording)"Arrêter et partager l’audio" else "Enregistrer un audio",tint=if(recording)Color.White else iBlue,modifier=Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(4.dp))
             IconButton(onClick={if(photoUri!=null)onSendPhoto(photoUri) else onSend()},enabled=draft.isNotBlank()||photoUri!=null,modifier=Modifier.size(46.dp).clip(CircleShape).background(if(draft.isNotBlank()||photoUri!=null)iBlue else muted.copy(alpha=.28f))){
                 Icon(Icons.Default.Send,"Envoyer",tint=Color.White,modifier=Modifier.size(22.dp))
             }

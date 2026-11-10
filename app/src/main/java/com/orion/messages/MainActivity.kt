@@ -87,6 +87,15 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.lifecycleScope
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.CustomCredential
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
+import kotlinx.coroutines.launch
 
 private val iBlue = Color(0xFF087CFA)
 private val iGray = Color(0xFF8E8E93)
@@ -101,6 +110,9 @@ data class OrionScreen(val page:String,val thread:ThreadItem?)
 
 class MainActivity:ComponentActivity(){
     private var tick by mutableIntStateOf(0)
+    private var googleEmail by mutableStateOf<String?>(null)
+    private var googleBusy by mutableStateOf(false)
+    private var googleMessage by mutableStateOf<String?>(null)
     private val smsObserver=object:ContentObserver(Handler(Looper.getMainLooper())){override fun onChange(selfChange:Boolean,uri:Uri?){tick++}}
     private var pendingCallNumber:String?=null
     private val callPermission=registerForActivityResult(ActivityResultContracts.RequestPermission()){granted->
@@ -118,7 +130,8 @@ class MainActivity:ComponentActivity(){
     override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState)
         showSystemBars()
         permissions.launch(arrayOf(Manifest.permission.READ_SMS,Manifest.permission.SEND_SMS,Manifest.permission.RECEIVE_SMS,Manifest.permission.READ_PHONE_STATE,Manifest.permission.READ_CONTACTS))
-        setContent{OrionApp(this,tick,{tick++},::makeDefault,::call,::send)}
+        googleEmail=FirebaseAuth.getInstance().currentUser?.email
+        setContent{OrionApp(this,tick,{tick++},::makeDefault,::call,::send,googleEmail,googleBusy,googleMessage,::signInGoogle,::signOutGoogle)}
     }
     override fun onResume(){super.onResume();runCatching{contentResolver.registerContentObserver(Telephony.Sms.CONTENT_URI,true,smsObserver)};tick++}
     override fun onPause(){runCatching{contentResolver.unregisterContentObserver(smsObserver)};super.onPause()}
@@ -132,6 +145,48 @@ class MainActivity:ComponentActivity(){
         controller.show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
         controller.isAppearanceLightStatusBars=true
         controller.isAppearanceLightNavigationBars=true
+    }
+    private fun signInGoogle(){
+        if(googleBusy)return
+        googleBusy=true
+        googleMessage=null
+        lifecycleScope.launch {
+            try {
+                val option=GetGoogleIdOption.Builder()
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId(getString(R.string.default_web_client_id))
+                    .setAutoSelectEnabled(false)
+                    .build()
+                val request=GetCredentialRequest.Builder().addCredentialOption(option).build()
+                val result=CredentialManager.create(this@MainActivity).getCredential(this@MainActivity,request)
+                val credential=result.credential
+                if(credential !is CustomCredential || credential.type!=GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL){
+                    googleBusy=false
+                    googleMessage="Type d’identifiant Google non reconnu."
+                    return@launch
+                }
+                val google=GoogleIdTokenCredential.createFrom(credential.data)
+                val firebaseCredential=GoogleAuthProvider.getCredential(google.idToken,null)
+                FirebaseAuth.getInstance().signInWithCredential(firebaseCredential)
+                    .addOnCompleteListener(this@MainActivity){task->
+                        googleBusy=false
+                        if(task.isSuccessful){
+                            googleEmail=task.result?.user?.email
+                            googleMessage="Compte Google connecté."
+                        }else{
+                            googleMessage=task.exception?.localizedMessage ?: "Connexion Google impossible."
+                        }
+                    }
+            }catch(e:Exception){
+                googleBusy=false
+                googleMessage=e.localizedMessage ?: "Connexion Google annulée ou impossible."
+            }
+        }
+    }
+    private fun signOutGoogle(){
+        FirebaseAuth.getInstance().signOut()
+        googleEmail=null
+        googleMessage="Compte Google déconnecté."
     }
     private fun makeDefault(){
         try{if(Build.VERSION.SDK_INT>=29){val r=getSystemService(RoleManager::class.java)
@@ -171,7 +226,7 @@ class MainActivity:ComponentActivity(){
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun OrionApp(ctx:Context,tick:Int,refresh:()->Unit,setDefault:()->Unit,call:(String)->Unit,send:(String,String,Int?,(String)->Unit)->Unit){
+@Composable fun OrionApp(ctx:Context,tick:Int,refresh:()->Unit,setDefault:()->Unit,call:(String)->Unit,send:(String,String,Int?,(String)->Unit)->Unit,googleEmail:String?,googleBusy:Boolean,googleMessage:String?,onGoogleSignIn:()->Unit,onGoogleSignOut:()->Unit){
     var page by remember{mutableStateOf("home")}
     var thread by remember{mutableStateOf<ThreadItem?>(null)}
     var themeMode by remember{mutableStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getString("theme_mode","system")?:"system")}
@@ -265,7 +320,7 @@ class MainActivity:ComponentActivity(){
             ){screen->
                 val screenMessages=remember(screen.thread?.address,tick){screen.thread?.address?.takeIf{it.isNotBlank()}?.let{readMessages(ctx,it)}?: emptyList()}
                 when {
-                    screen.page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,themeMode,{mode->themeMode=mode;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("theme_mode",mode).apply()},ownerName,{value->ownerName=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_name",value).apply()},ownerPhone,{value->ownerPhone=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_phone",value).apply()},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},setDefault,{page="about"})
+                    screen.page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,themeMode,{mode->themeMode=mode;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("theme_mode",mode).apply()},ownerName,{value->ownerName=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_name",value).apply()},ownerPhone,{value->ownerPhone=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_phone",value).apply()},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},setDefault,{page="about"},googleEmail,googleBusy,googleMessage,onGoogleSignIn,onGoogleSignOut)
                     screen.page=="about" -> AboutScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted)
                     screen.page=="profile" && screen.thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),screen.thread,contacts,ink,muted,surface,ctx,call,{page="chat"},{message->status=message})
                     screen.page=="compose" -> NewMessageScreen(Modifier.fillMaxSize().padding(pad),contacts,composeQuery,{composeQuery=it;composeNotice=""},{contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;draft="";page="chat";status=""},{raw->val cleaned=raw.trim();val digits=cleaned.filter{it.isDigit()};val found=contacts.firstOrNull{it.name.equals(cleaned,true)||it.number.filter{ch->ch.isDigit()}==digits}?:contacts.firstOrNull{it.name.startsWith(cleaned,true)};if(found!=null||digits.length in 7..15){val dest=found?.number?:cleaned;val label=found?.name?:dest;thread=ThreadItem(dest,"",0,label);number=dest;draft="";page="chat";status=""}else composeNotice="Aucun contact correspondant. Vérifie le nom ou saisis un numéro valide."},composeNotice,{composeNotice=it})
@@ -593,7 +648,7 @@ class MainActivity:ComponentActivity(){
     }
 }
 
-@Composable private fun SettingsScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,themeMode:String,onThemeMode:(String)->Unit,ownerName:String,onOwnerName:(String)->Unit,ownerPhone:String,onOwnerPhone:(String)->Unit,sims:List<SimChoice>,selected:Int,onSim:(Int)->Unit,fontChoice:String,onFont:(String)->Unit,onDefault:()->Unit,onAbout:()->Unit){
+@Composable private fun SettingsScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,themeMode:String,onThemeMode:(String)->Unit,ownerName:String,onOwnerName:(String)->Unit,ownerPhone:String,onOwnerPhone:(String)->Unit,sims:List<SimChoice>,selected:Int,onSim:(Int)->Unit,fontChoice:String,onFont:(String)->Unit,onDefault:()->Unit,onAbout:()->Unit,googleEmail:String?,googleBusy:Boolean,googleMessage:String?,onGoogleSignIn:()->Unit,onGoogleSignOut:()->Unit){
     var previewChoice by remember(fontChoice){mutableStateOf(fontChoice)}
     val choices=listOf("System","San Francisco","Roboto","Rounded","Handwritten","Elegant","Typewriter","Condensed","Lato","Pacifico","Dancing Script","Light","Bold")
     fun fontLabel(choice:String)=when(choice){"System"->"Police du système";"San Francisco"->"Style San Francisco (Inter)";"Handwritten"->"Manuscrite / stylo";"Elegant"->"Élégante";"Typewriter"->"Machine à écrire";"Pacifico"->"Manuscrite — Pacifico";"Dancing Script"->"Manuscrite — Dancing Script";else->choice}
@@ -632,11 +687,34 @@ class MainActivity:ComponentActivity(){
         }
         Spacer(Modifier.height(22.dp));SectionTitle("COMPTE GOOGLE ET SAUVEGARDE",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
-            Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.CloudSync,null,tint=iBlue,modifier=Modifier.size(26.dp));Spacer(Modifier.width(10.dp));Column(Modifier.weight(1f)){Text("Synchronisation Google",color=ink,fontWeight=FontWeight.SemiBold);Text("Connexion à configurer",color=muted,fontSize=12.sp)}}
-            Text("La connexion Google, la sauvegarde cloud et la restauration nécessitent les identifiants OAuth et le projet Firebase d’ORION. Aucun message ne sera envoyé vers le cloud avant ton autorisation.",color=muted,fontSize=12.sp,modifier=Modifier.padding(top=12.dp))
-            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment=Alignment.CenterVertically){
+                Icon(Icons.Default.CloudSync,null,tint=iBlue,modifier=Modifier.size(26.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)){
+                    Text("Compte Google",color=ink,fontWeight=FontWeight.SemiBold)
+                    Text(googleEmail ?: "Non connecté",color=muted,fontSize=12.sp)
+                }
+            }
+            Text("Connecte ton compte Google à ORION. Cette connexion ne sauvegarde aucun SMS et n’active aucune synchronisation automatiquement.",color=muted,fontSize=12.sp,modifier=Modifier.padding(top=12.dp))
+            Spacer(Modifier.height(12.dp))
+            if(googleEmail==null){
+                Button(onClick=onGoogleSignIn,enabled=!googleBusy,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){
+                    if(googleBusy)CircularProgressIndicator(modifier=Modifier.size(18.dp),strokeWidth=2.dp,color=Color.White)
+                    else Icon(Icons.Default.AccountCircle,null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if(googleBusy)"Connexion en cours…" else "Se connecter avec Google")
+                }
+            }else{
+                OutlinedButton(onClick=onGoogleSignOut,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){
+                    Icon(Icons.Default.Logout,null);Spacer(Modifier.width(8.dp));Text("Déconnecter ce compte")
+                }
+            }
+            if(!googleMessage.isNullOrBlank())Text(googleMessage,color=if(googleEmail!=null)Color(0xFF34A853) else muted,fontSize=12.sp,modifier=Modifier.padding(top=9.dp))
+            Spacer(Modifier.height(14.dp))
+            HorizontalDivider(color=muted.copy(alpha=.2f))
+            Spacer(Modifier.height(12.dp))
             Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.Backup,null,tint=muted);Spacer(Modifier.width(8.dp));Text("Sauvegarder et restaurer les SMS",color=muted,fontSize=13.sp)}
-            Text("Disponible après la configuration sécurisée du compte Google.",color=muted,fontSize=11.sp,modifier=Modifier.padding(start=32.dp,top=3.dp))
+            Text("Sauvegarde cloud non activée. Tes SMS restent sur le téléphone tant que tu n’autorises pas explicitement une sauvegarde.",color=muted,fontSize=11.sp,modifier=Modifier.padding(start=32.dp,top=3.dp))
         }
         Spacer(Modifier.height(22.dp));SectionTitle("POLICE D’ÉCRITURE",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){

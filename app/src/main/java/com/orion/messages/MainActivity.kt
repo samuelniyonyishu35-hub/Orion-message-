@@ -55,6 +55,13 @@ data class SimChoice(val id:Int,val slot:Int,val label:String)
 
 class MainActivity:ComponentActivity(){
     private var tick by mutableIntStateOf(0)
+    private var pendingCallNumber:String?=null
+    private val callPermission=registerForActivityResult(ActivityResultContracts.RequestPermission()){granted->
+        val target=pendingCallNumber
+        pendingCallNumber=null
+        if(granted && !target.isNullOrBlank()) placeCall(target)
+        else Toast.makeText(this,"Autorisation d'appel refusée.",Toast.LENGTH_LONG).show()
+    }
     private val permissions=registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()){tick++}
     private val role=registerForActivityResult(ActivityResultContracts.StartActivityForResult()){
         tick++
@@ -63,13 +70,22 @@ class MainActivity:ComponentActivity(){
     }
     override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState)
         permissions.launch(arrayOf(Manifest.permission.READ_SMS,Manifest.permission.SEND_SMS,Manifest.permission.RECEIVE_SMS,Manifest.permission.READ_PHONE_STATE,Manifest.permission.READ_CONTACTS))
-        setContent{OrionApp(this,tick,{tick++},::makeDefault,::send)}
+        setContent{OrionApp(this,tick,{tick++},::makeDefault,::call,::send)}
     }
     private fun makeDefault(){
         try{if(Build.VERSION.SDK_INT>=29){val r=getSystemService(RoleManager::class.java)
             if(r!=null&&r.isRoleAvailable(RoleManager.ROLE_SMS)){if(r.isRoleHeld(RoleManager.ROLE_SMS))Toast.makeText(this,"Déjà l'application SMS par défaut",Toast.LENGTH_SHORT).show() else role.launch(r.createRequestRoleIntent(RoleManager.ROLE_SMS))}
         }else{@Suppress("DEPRECATION") role.launch(Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT).putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME,packageName))}}
         catch(e:Exception){Toast.makeText(this,e.localizedMessage,Toast.LENGTH_LONG).show()}
+    }
+    private fun call(number:String){
+        if(number.isBlank()){Toast.makeText(this,"Numéro indisponible.",Toast.LENGTH_SHORT).show();return}
+        if(ContextCompat.checkSelfPermission(this,Manifest.permission.CALL_PHONE)==PackageManager.PERMISSION_GRANTED){placeCall(number)}
+        else {pendingCallNumber=number;callPermission.launch(Manifest.permission.CALL_PHONE)}
+    }
+    private fun placeCall(number:String){
+        try{startActivity(Intent(Intent.ACTION_CALL,Uri.fromParts("tel",number,null)))}
+        catch(e:Exception){Toast.makeText(this,"Impossible de lancer l'appel : ${e.localizedMessage}",Toast.LENGTH_LONG).show()}
     }
     private fun send(to:String,body:String,sim:Int?,done:(String)->Unit){
         if(ContextCompat.checkSelfPermission(this,Manifest.permission.SEND_SMS)!=PackageManager.PERMISSION_GRANTED){permissions.launch(arrayOf(Manifest.permission.SEND_SMS));done("Autorise l'envoi SMS puis réessaie.");return}
@@ -80,7 +96,7 @@ class MainActivity:ComponentActivity(){
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun OrionApp(ctx:Context,tick:Int,refresh:()->Unit,setDefault:()->Unit,send:(String,String,Int?,(String)->Unit)->Unit){
+@Composable fun OrionApp(ctx:Context,tick:Int,refresh:()->Unit,setDefault:()->Unit,call:(String)->Unit,send:(String,String,Int?,(String)->Unit)->Unit){
     var page by remember{mutableStateOf("home")}
     var thread by remember{mutableStateOf<ThreadItem?>(null)}
     var dark by remember{mutableStateOf(false)}
@@ -110,7 +126,7 @@ class MainActivity:ComponentActivity(){
                         Column { Text(thread!!.displayName,fontSize=17.sp,fontWeight=FontWeight.SemiBold,color=ink,maxLines=1,overflow=TextOverflow.Ellipsis);Text("touchez pour afficher le profil",fontSize=11.sp,color=muted) }
                     }},
                     navigationIcon={IconButton(onClick={thread=null;page="home";status=""}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},
-                    actions={IconButton(onClick={openDialer(ctx,thread!!.address.ifBlank{number})}){Icon(Icons.Default.Call,"Appeler",tint=iBlue)}},
+                    actions={IconButton(onClick={call(thread!!.address.ifBlank{number})}){Icon(Icons.Default.Call,"Appeler",tint=iBlue)}},
                     colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
                 else -> TopAppBar(title={Column{Text("Messages",fontSize=30.sp,fontWeight=FontWeight.Bold,color=ink,letterSpacing=(-.8).sp);Text("ORION",fontSize=10.sp,color=muted,letterSpacing=2.sp)}},
                     actions={IconButton(onClick={page="settings"}){Icon(Icons.Default.Settings,null,tint=iBlue)}},
@@ -121,12 +137,12 @@ class MainActivity:ComponentActivity(){
             AnimatedContent(targetState=page+if(thread!=null)"-thread" else "",label="orion-page"){screen->
                 when {
                     page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,dark,{dark=it},sims,sim,{sim=it},setDefault)
-                    page=="profile" && thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),thread!!,contacts,ink,muted,surface,ctx,{blocked->status=if(blocked)"Ce numéro est bloqué par Android." else "Ce numéro n'est pas bloqué."})
+                    page=="profile" && thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),thread!!,contacts,ink,muted,surface,ctx,call,{message->status=message})
                     thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,conversations,contacts,query,{query=it},
                         {item->thread=item;number=item.address;page="chat";status=""},
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
                     else -> ChatScreen(Modifier.fillMaxSize().padding(pad),thread!!,number,{number=it},draft,{draft=it},status,ink,muted,surface,
-                        {page="profile"},{openDialer(ctx,thread!!.address.ifBlank{number})},{
+                        {page="profile"},{call(thread!!.address.ifBlank{number})},{
                             val dest=thread!!.address.ifBlank{number}.trim()
                             if(dest.isBlank())status="Saisis le numéro du destinataire."
                             else if(draft.isBlank())status="Écris un message."
@@ -146,8 +162,15 @@ class MainActivity:ComponentActivity(){
 }
 
 @Composable private fun HomeScreen(mod:Modifier,surface:Color,ink:Color,muted:Color,threads:List<ThreadItem>,contacts:List<ContactItem>,query:String,onQuery:(String)->Unit,onOpen:(ThreadItem)->Unit,onContact:(ContactItem)->Unit){
-    val matchingThreads=threads.filter{query.isBlank()||it.address.contains(query,true)||it.displayName.contains(query,true)||it.body.contains(query,true)}
-    val matchingContacts=if(query.isBlank()) emptyList() else contacts.filter{it.name.contains(query,true)||it.number.contains(query,true)}.take(8)
+    val normalizedQuery=query.filter{it.isDigit()}
+    val matchingThreads=threads.filter{
+        query.isBlank() || it.address.contains(query,true) || it.displayName.contains(query,true) ||
+        it.body.contains(query,true) || (normalizedQuery.length>=2 && it.address.filter{ch->ch.isDigit()}.contains(normalizedQuery))
+    }
+    val matchingContacts=if(query.isBlank()) emptyList() else contacts.filter{
+        it.name.contains(query,true) || it.number.contains(query,true) ||
+        (normalizedQuery.length>=2 && it.number.filter{ch->ch.isDigit()}.contains(normalizedQuery))
+    }.take(8)
     Column(mod.padding(horizontal=16.dp)){
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if(surface==Color.White)Color(0xFFE5E5EA) else surface).padding(horizontal=12.dp,vertical=2.dp),verticalAlignment=Alignment.CenterVertically){
@@ -171,7 +194,7 @@ class MainActivity:ComponentActivity(){
             Spacer(Modifier.height(18.dp))
             Text("DISCUSSIONS",fontSize=11.sp,fontWeight=FontWeight.Bold,color=muted,letterSpacing=1.3.sp)
         }
-        if(matchingThreads.isEmpty()){
+        if(matchingThreads.isEmpty() && matchingContacts.isEmpty()){
             Column(Modifier.fillMaxWidth().padding(top=55.dp),horizontalAlignment=Alignment.CenterHorizontally){
                 Box(Modifier.size(72.dp).clip(CircleShape).background(iBlue.copy(alpha=.12f)),contentAlignment=Alignment.Center){Icon(Icons.Default.ChatBubble,null,tint=iBlue,modifier=Modifier.size(32.dp))}
                 Spacer(Modifier.height(14.dp));Text(if(query.isBlank())"Aucun message" else "Aucun résultat",fontWeight=FontWeight.SemiBold,color=ink,fontSize=18.sp)
@@ -202,11 +225,7 @@ class MainActivity:ComponentActivity(){
             }
             HorizontalDivider(color=muted.copy(alpha=.25f))
         }else{
-            Column(Modifier.fillMaxWidth().clickable(onClick=onProfile).padding(top=6.dp,bottom=12.dp),horizontalAlignment=Alignment.CenterHorizontally){
-                Box(Modifier.size(66.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Color(0xFF8DB8FF),Color(0xFF3769D8))).also{}),contentAlignment=Alignment.Center){Text(item.displayName.take(1).uppercase(),color=Color.White,fontSize=27.sp,fontWeight=FontWeight.SemiBold)}
-                Spacer(Modifier.height(7.dp));Text(item.displayName,color=ink,fontSize=15.sp,fontWeight=FontWeight.SemiBold)
-                Text(item.address,color=muted,fontSize=12.sp)
-            }
+            Spacer(Modifier.height(4.dp))
             HorizontalDivider(color=muted.copy(alpha=.3f),thickness=0.8.dp)
         }
         Box(Modifier.weight(1f).fillMaxWidth().padding(top=14.dp),contentAlignment=Alignment.BottomEnd){
@@ -233,9 +252,9 @@ class MainActivity:ComponentActivity(){
     }
 }
 
-@Composable private fun ProfileScreen(mod:Modifier,item:ThreadItem,contacts:List<ContactItem>,ink:Color,muted:Color,surface:Color,ctx:Context,onBlockResult:(Boolean)->Unit){
+@Composable private fun ProfileScreen(mod:Modifier,item:ThreadItem,contacts:List<ContactItem>,ink:Color,muted:Color,surface:Color,ctx:Context,call:(String)->Unit,onBlockResult:(String)->Unit){
     val number=item.address
-    var blocked by remember(number){mutableStateOf(runCatching{BlockedNumberContract.isBlocked(ctx,number)}.getOrDefault(false))}
+    var blocked by remember(number){mutableStateOf(runCatching{BlockedNumberContract.canCurrentUserBlockNumbers(ctx) && BlockedNumberContract.isBlocked(ctx,number)}.getOrDefault(false))}
     val contact=contacts.firstOrNull{normalizePhone(it.number)==normalizePhone(number)}
     Column(mod.fillMaxSize().padding(horizontal=18.dp),horizontalAlignment=Alignment.CenterHorizontally){
         Spacer(Modifier.height(24.dp))
@@ -247,7 +266,7 @@ class MainActivity:ComponentActivity(){
         Spacer(Modifier.height(22.dp))
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)){
             ProfileAction("message",Icons.Default.Message,Modifier.weight(1f),surface,ink){}
-            ProfileAction("appeler",Icons.Default.Call,Modifier.weight(1f),surface,ink){openDialer(ctx,number)}
+            ProfileAction("appeler",Icons.Default.Call,Modifier.weight(1f),surface,ink){call(number)}
         }
         Spacer(Modifier.height(25.dp));HorizontalDivider(color=muted.copy(alpha=.3f))
         Column(Modifier.fillMaxWidth().padding(vertical=17.dp)){
@@ -258,8 +277,20 @@ class MainActivity:ComponentActivity(){
         }
         HorizontalDivider(color=muted.copy(alpha=.3f))
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(surface).clickable{
-            val result=runCatching{if(blocked){BlockedNumberContract.unblock(ctx,number)}else{ctx.contentResolver.insert(BlockedNumberContract.BlockedNumbers.CONTENT_URI,android.content.ContentValues().apply{put(BlockedNumberContract.BlockedNumbers.COLUMN_ORIGINAL_NUMBER,number)})};blocked=!blocked;onBlockResult(blocked)}.isSuccess
-            if(!result)onBlockResult(blocked)
+            runCatching{
+                if(!BlockedNumberContract.canCurrentUserBlockNumbers(ctx)) throw SecurityException("Le blocage Android n'est pas disponible pour cet utilisateur.")
+                if(blocked){
+                    val removed=BlockedNumberContract.unblock(ctx,number)
+                    if(removed<=0) throw IllegalStateException("Android n'a pas supprimé ce numéro.")
+                }else{
+                    val uri=ctx.contentResolver.insert(BlockedNumberContract.BlockedNumbers.CONTENT_URI,android.content.ContentValues().apply{put(BlockedNumberContract.BlockedNumbers.COLUMN_ORIGINAL_NUMBER,number)})
+                    if(uri==null) throw IllegalStateException("Android a refusé l'ajout du numéro.")
+                }
+                val actual=BlockedNumberContract.isBlocked(ctx,number)
+                if(actual==blocked) throw IllegalStateException("Android n'a pas confirmé le changement.")
+                blocked=actual
+                onBlockResult(if(actual)"Numéro bloqué par Android." else "Numéro débloqué.")
+            }.onFailure{error->onBlockResult("Échec du blocage : ${error.localizedMessage ?: "Android a refusé l'opération"}. Vérifie qu'ORION est l'application SMS par défaut.")}
         }.padding(16.dp),verticalAlignment=Alignment.CenterVertically){
             Icon(if(blocked)Icons.Default.CheckCircle else Icons.Default.Block,null,tint=if(blocked)Color(0xFF34C759) else Color(0xFFFF453A))
             Spacer(Modifier.width(12.dp));Text(if(blocked)"Débloquer ce correspondant" else "Bloquer ce correspondant",color=if(blocked)Color(0xFFFF453A) else ink,fontSize=15.sp)

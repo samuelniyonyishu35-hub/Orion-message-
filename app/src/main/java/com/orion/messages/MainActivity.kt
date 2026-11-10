@@ -22,7 +22,6 @@ import android.database.ContentObserver
 import android.os.Handler
 import android.os.Looper
 import android.app.PendingIntent
-import android.app.Activity
 import androidx.compose.ui.platform.LocalContext
 import java.io.File
 import android.telephony.SmsManager

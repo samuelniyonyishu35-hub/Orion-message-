@@ -171,7 +171,7 @@ class MainActivity:ComponentActivity(){
         Spacer(Modifier.height(22.dp));SectionTitle("CONFIDENTIALITÉ",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
             Text("Noms de tes contacts",color=ink,fontWeight=FontWeight.SemiBold)
-            Text("ORION ne demande pas l'autorisation Contacts et ne lit pas ton carnet d'adresses. Les conversations utilisent les numéros présents dans les SMS.",color=muted,fontSize=12.sp)
+            Text("ORION utilise l'autorisation Contacts pour associer les numéros aux noms enregistrés dans ton carnet d'adresses.",color=muted,fontSize=12.sp)
         }
     }
 }
@@ -194,7 +194,7 @@ private fun readThreads(ctx:Context):List<ThreadItem>{
     val out=mutableListOf<ThreadItem>()
     try{ctx.contentResolver.query(Telephony.Sms.CONTENT_URI,arrayOf(Telephony.Sms.ADDRESS,Telephony.Sms.BODY,Telephony.Sms.DATE),null,null,Telephony.Sms.DATE+" DESC")?.use{c->
         val ai=c.getColumnIndex(Telephony.Sms.ADDRESS);val bi=c.getColumnIndex(Telephony.Sms.BODY);val di=c.getColumnIndex(Telephony.Sms.DATE);val seen=mutableSetOf<String>()
-        while(c.moveToNext()&&out.size<100){val a=if(ai>=0)c.getString(ai)?:"Inconnu" else "Inconnu";if(seen.add(a))out.add(ThreadItem(a,if(bi>=0)c.getString(bi)?:"",if(di>=0)c.getLong(di) else 0L,names[normalizePhone(a)]?:a))}
+        while(c.moveToNext()&&out.size<100){val a=if(ai>=0)c.getString(ai)?:"Inconnu" else "Inconnu";if(seen.add(a))out.add(ThreadItem(a,if(bi>=0)c.getString(bi)?:"" else "",if(di>=0)c.getLong(di) else 0L,names[normalizePhone(a)]?:a))}
     }}catch(_:Exception){};return out
 }
 

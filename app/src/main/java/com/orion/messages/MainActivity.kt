@@ -104,6 +104,7 @@ private val iDark = Color(0xFF000000)
 
 data class ThreadItem(val address:String,val body:String,val date:Long,val displayName:String=address)
 data class SmsRecord(val id:Long,val body:String,val date:Long,val type:Int,val status:Int)
+data class BackupSms(val address:String,val body:String,val date:Long,val type:Int,val status:Int,val read:Boolean)
 data class ContactItem(val name:String,val number:String)
 data class SimChoice(val id:Int,val slot:Int,val label:String)
 data class OrionScreen(val page:String,val thread:ThreadItem?)
@@ -839,6 +840,16 @@ private fun readMessages(ctx:Context,address:String):List<SmsRecord>{
         val id=c.getColumnIndex(Telephony.Sms._ID);val ai=c.getColumnIndex(Telephony.Sms.ADDRESS);val bi=c.getColumnIndex(Telephony.Sms.BODY);val di=c.getColumnIndex(Telephony.Sms.DATE);val ti=c.getColumnIndex(Telephony.Sms.TYPE);val si=c.getColumnIndex(Telephony.Sms.STATUS)
         while(c.moveToNext()&&out.size<300){val a=if(ai>=0)c.getString(ai).orEmpty() else "";if(normalizePhone(a)==normalizePhone(address)){out.add(SmsRecord(if(id>=0)c.getLong(id) else out.size.toLong(),if(bi>=0)c.getString(bi).orEmpty() else "",if(di>=0)c.getLong(di) else 0L,if(ti>=0)c.getInt(ti) else Telephony.Sms.MESSAGE_TYPE_INBOX,if(si>=0)c.getInt(si) else Telephony.Sms.STATUS_NONE))}}
     }}catch(_:Exception){}
+    return out
+}
+
+private fun readAllSmsForBackup(ctx:Context):List<BackupSms>{
+    if(ContextCompat.checkSelfPermission(ctx,Manifest.permission.READ_SMS)!=PackageManager.PERMISSION_GRANTED)throw SecurityException("Permission de lecture des SMS refusée")
+    val out=mutableListOf<BackupSms>()
+    ctx.contentResolver.query(Telephony.Sms.CONTENT_URI,arrayOf(Telephony.Sms.ADDRESS,Telephony.Sms.BODY,Telephony.Sms.DATE,Telephony.Sms.TYPE,Telephony.Sms.STATUS,Telephony.Sms.READ),null,null,Telephony.Sms.DATE+" ASC")?.use{c->
+        val ai=c.getColumnIndex(Telephony.Sms.ADDRESS);val bi=c.getColumnIndex(Telephony.Sms.BODY);val di=c.getColumnIndex(Telephony.Sms.DATE);val ti=c.getColumnIndex(Telephony.Sms.TYPE);val si=c.getColumnIndex(Telephony.Sms.STATUS);val ri=c.getColumnIndex(Telephony.Sms.READ)
+        while(c.moveToNext()){out.add(BackupSms(if(ai>=0)c.getString(ai).orEmpty() else "",if(bi>=0)c.getString(bi).orEmpty() else "",if(di>=0)c.getLong(di) else 0L,if(ti>=0)c.getInt(ti) else Telephony.Sms.MESSAGE_TYPE_INBOX,if(si>=0)c.getInt(si) else Telephony.Sms.STATUS_NONE,ri>=0&&c.getInt(ri)==1))}
+    }?:throw IllegalStateException("Impossible de lire les SMS")
     return out
 }
 

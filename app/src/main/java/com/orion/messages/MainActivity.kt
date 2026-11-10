@@ -460,10 +460,7 @@ class MainActivity:ComponentActivity(){
                 val i=Intent(Intent.ACTION_INSERT).setType(ContactsContract.Contacts.CONTENT_TYPE).apply{putExtra(ContactsContract.Intents.Insert.PHONE,number);if(contact!=null)putExtra(ContactsContract.Intents.Insert.NAME,contact.name)}
                 runCatching{ctx.startActivity(i)}.onFailure{onBlockResult("Impossible d'ouvrir les contacts")}
             }
-            ProfileAction("Partager",Icons.Default.Share,Modifier.weight(1f),surface,ink){
-                val i=Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,number)
-                runCatching{ctx.startActivity(Intent.createChooser(i,"Partager ce numéro avec"))}
-            }
+            ProfileAction("Partager",Icons.Default.Share,Modifier.weight(1f),surface,ink){shareTextWithChooser(ctx,number)}
         }
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)){
             ProfileAction("WhatsApp",Icons.Default.Chat,Modifier.weight(1f),surface,ink){runCatching{ctx.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://wa.me/"+number.filter{it.isDigit()})))}}
@@ -635,7 +632,13 @@ private fun deleteConversation(ctx:Context,address:String):Int{
 private fun shareTextWithChooser(ctx:Context,text:String){
     if(text.isBlank())return
     val intent=Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,text)
-    runCatching{ctx.startActivity(Intent.createChooser(intent,"Choisir WhatsApp, WhatsApp Business ou une autre application"))}
+    val whatsappTargets=listOf("com.whatsapp","com.whatsapp.w4b").mapNotNull{packageName->
+        val target=Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,text).setPackage(packageName)
+        if(runCatching{target.resolveActivity(ctx.packageManager)!=null}.getOrDefault(false))target else null
+    }
+    val chooser=Intent.createChooser(intent,"Choisir WhatsApp, WhatsApp Business ou une autre application")
+    if(whatsappTargets.isNotEmpty())chooser.putExtra(Intent.EXTRA_INITIAL_INTENTS,whatsappTargets.toTypedArray())
+    runCatching{ctx.startActivity(chooser)}.onFailure{Toast.makeText(ctx,"Aucune application de partage disponible.",Toast.LENGTH_LONG).show()}
 }
 
 private fun senderLabel(address:String):String=if(address.trim().equals("PCB",ignoreCase=true)||address.trim().equals("BCB",ignoreCase=true)) "Connect" else address

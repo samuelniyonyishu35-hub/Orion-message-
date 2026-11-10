@@ -62,6 +62,10 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -158,6 +162,8 @@ class MainActivity:ComponentActivity(){
     var thread by remember{mutableStateOf<ThreadItem?>(null)}
     var dark by remember{mutableStateOf(false)}
     var query by remember{mutableStateOf("")}
+    var composeQuery by remember{mutableStateOf("")}
+    var composeNotice by remember{mutableStateOf("")}
     var number by remember{mutableStateOf("")}
     var draft by remember{mutableStateOf("")}
     var photoUri by remember{mutableStateOf<Uri?>(null)}
@@ -175,7 +181,7 @@ class MainActivity:ComponentActivity(){
     val conversations=remember(tick){readThreads(ctx)}
     val messages=remember(tick,thread?.address){thread?.address?.takeIf{it.isNotBlank()}?.let{readMessages(ctx,it)}?: emptyList()}
     var fontChoice by remember{mutableStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getString("font","System")?:"System")}
-    val appFont=fontFamilyForChoice(fontChoice)
+    val appFont=fontFamilyForChoice(ctx,fontChoice)
     val appWeight=when(fontChoice){"Light"->FontWeight.Light;"Bold"->FontWeight.Bold;else->FontWeight.Normal}
     val contacts=remember(tick){readContacts(ctx)}
     LaunchedEffect(sims){if(sims.none{it.id==sim})sim=sims.firstOrNull()?.id?:SubscriptionManager.INVALID_SUBSCRIPTION_ID}
@@ -195,6 +201,7 @@ class MainActivity:ComponentActivity(){
     MaterialTheme(colorScheme=if(dark)darkColorScheme(primary=iBlue,background=bg,surface=surface) else lightColorScheme(primary=iBlue,background=bg,surface=surface),typography=Typography().copy(bodyLarge=Typography().bodyLarge.copy(fontFamily=appFont,fontWeight=appWeight),bodyMedium=Typography().bodyMedium.copy(fontFamily=appFont,fontWeight=appWeight),bodySmall=Typography().bodySmall.copy(fontFamily=appFont,fontWeight=appWeight),titleLarge=Typography().titleLarge.copy(fontFamily=appFont,fontWeight=appWeight))){
         Scaffold(containerColor=bg,topBar={
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) { when {
+                page=="compose" -> TopAppBar(title={Text("Nouveau message",fontSize=22.sp,fontWeight=FontWeight.Bold,color=ink)},navigationIcon={IconButton(onClick={page="home";composeQuery="";composeNotice=""}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
                 page=="settings" -> TopAppBar(title={Text("Réglages",fontSize=28.sp,fontWeight=FontWeight.Bold,color=ink)},navigationIcon={IconButton(onClick={page="home"}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
                 page=="about" -> TopAppBar(title={Text("À propos",fontSize=20.sp,fontWeight=FontWeight.SemiBold,color=ink)},navigationIcon={IconButton(onClick={page="settings"}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
                 page=="profile" -> TopAppBar(title={Text("Informations",fontSize=20.sp,fontWeight=FontWeight.SemiBold,color=ink)},navigationIcon={IconButton(onClick={page="chat"}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
@@ -211,13 +218,14 @@ class MainActivity:ComponentActivity(){
                     navigationIcon={IconButton(onClick={page="settings"}){Icon(Icons.Default.MoreVert,"Ouvrir les réglages",tint=iBlue)}},
                     colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
             } }
-        },floatingActionButton={if(page=="home"&&thread==null)FloatingActionButton(onClick={number="";draft="";thread=ThreadItem("","",0,"Nouveau message");page="chat";status=""},containerColor=iBlue,contentColor=Color.White,shape=CircleShape){Icon(Icons.Default.Edit,"Nouveau message")}}
+        },floatingActionButton={if(page=="home"&&thread==null)FloatingActionButton(onClick={composeQuery="";composeNotice="";number="";draft="";thread=null;page="compose";status=""},containerColor=iBlue,contentColor=Color.White,shape=CircleShape){Icon(Icons.Default.Edit,"Nouveau message")}}
         ){pad->
             AnimatedContent(targetState=page+if(thread!=null)"-thread" else "",label="orion-page"){screen->
                 when {
-                    page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted,dark,{dark=it},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},setDefault,{page="about"})
+                    page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,dark,{dark=it},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},setDefault,{page="about"})
                     page=="about" -> AboutScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted)
                     page=="profile" && thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),thread!!,contacts,ink,muted,surface,ctx,call,{page="chat"},{message->status=message})
+                    page=="compose" -> NewMessageScreen(Modifier.fillMaxSize().padding(pad),contacts,composeQuery,{composeQuery=it;composeNotice=""},{contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;draft="";page="chat";status=""},{raw->val found=contacts.firstOrNull{it.name.equals(raw.trim(),true)||it.number.filter{ch->it.isDigit()}==raw.filter{ch->it.isDigit()}};val dest=found?.number?:raw.trim();val label=found?.name?:dest;thread=ThreadItem(dest,"",0,label);number=dest;draft="";page="chat";status=""},composeNotice,{composeNotice=it})
                     thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,conversations,contacts,query,{query=it},
                         {item->thread=item;number=item.address;page="chat";status=""},
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
@@ -322,6 +330,38 @@ class MainActivity:ComponentActivity(){
                     Icon(Icons.Default.ChevronRight,null,tint=muted)
                 }
                 HorizontalDivider(color=muted.copy(alpha=.2f),modifier=Modifier.padding(start=63.dp))
+            }
+        }
+    }
+}
+
+@Composable private fun NewMessageScreen(mod:Modifier,contacts:List<ContactItem>,query:String,onQuery:(String)->Unit,onContact:(ContactItem)->Unit,onSubmit:(String)->Unit,notice:String,onNotice:(String)->Unit){
+    val normalized=query.filter{it.isDigit()}
+    val filtered=contacts.filter{query.isBlank()||it.name.contains(query,true)||it.number.contains(query,true)||(normalized.length>=2&&it.number.filter{ch->ch.isDigit()}.contains(normalized))}
+    Column(mod.padding(horizontal=16.dp)){
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(value=query,onValueChange=onQuery,modifier=Modifier.fillMaxWidth(),singleLine=true,placeholder={Text("Nom ou numéro de téléphone")},leadingIcon={Icon(Icons.Default.Search,null,tint=iBlue)},trailingIcon={if(query.isNotBlank())IconButton(onClick={onQuery("");onNotice("")}){Icon(Icons.Default.Close,"Effacer")}},shape=RoundedCornerShape(16.dp),keyboardOptions=KeyboardOptions(imeAction=ImeAction.Done),keyboardActions=KeyboardActions(onDone={if(query.isNotBlank())onSubmit(query)}))
+        Text("TOUS LES CONTACTS",fontSize=11.sp,fontWeight=FontWeight.Bold,color=iGray,letterSpacing=1.2.sp,modifier=Modifier.padding(top=22.dp,bottom=8.dp))
+        if(notice.isNotBlank())Text(notice,color=Color(0xFFFF453A),fontSize=12.sp,modifier=Modifier.padding(vertical=6.dp))
+        if(filtered.isEmpty()){
+            Column(Modifier.fillMaxWidth().padding(top=48.dp),horizontalAlignment=Alignment.CenterHorizontally){
+                Icon(Icons.Default.PersonSearch,null,tint=iGray,modifier=Modifier.size(42.dp))
+                Spacer(Modifier.height(10.dp))
+                Text(if(query.isBlank())"Aucun contact disponible" else "Aucun contact trouvé",color=iGray,fontWeight=FontWeight.Medium)
+                if(query.isNotBlank())Text("Appuie sur Entrée pour utiliser ce nom ou ce numéro.",color=iGray,fontSize=12.sp,modifier=Modifier.padding(top=5.dp))
+            }
+        }else LazyColumn(contentPadding=PaddingValues(bottom=28.dp)){
+            items(filtered,key={it.number}){contact->
+                Row(Modifier.fillMaxWidth().clickable{onContact(contact)}.padding(vertical=11.dp),verticalAlignment=Alignment.CenterVertically){
+                    Avatar(contact.name,46)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)){
+                        Text(contact.name,color=Color.Unspecified,fontWeight=FontWeight.SemiBold,fontSize=15.sp)
+                        Text(contact.number,color=iGray,fontSize=13.sp)
+                    }
+                    Icon(Icons.Default.Message,null,tint=iBlue)
+                }
+                HorizontalDivider(color=iGray.copy(alpha=.18f),modifier=Modifier.padding(start=58.dp))
             }
         }
     }
@@ -510,7 +550,7 @@ class MainActivity:ComponentActivity(){
     }
 }
 
-@Composable private fun SettingsScreen(mod:Modifier,surface:Color,ink:Color,muted:Color,dark:Boolean,onDark:(Boolean)->Unit,sims:List<SimChoice>,selected:Int,onSim:(Int)->Unit,fontChoice:String,onFont:(String)->Unit,onDefault:()->Unit,onAbout:()->Unit){
+@Composable private fun SettingsScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,dark:Boolean,onDark:(Boolean)->Unit,sims:List<SimChoice>,selected:Int,onSim:(Int)->Unit,fontChoice:String,onFont:(String)->Unit,onDefault:()->Unit,onAbout:()->Unit){
     Column(mod.padding(horizontal=16.dp)){
         Spacer(Modifier.height(16.dp));SectionTitle("APPLICATION",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
@@ -532,10 +572,10 @@ class MainActivity:ComponentActivity(){
         Spacer(Modifier.height(22.dp));SectionTitle("POLICE D’ÉCRITURE",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
             Text("Choisir la police des messages",color=ink,fontWeight=FontWeight.SemiBold)
-            Text("Aperçu : Aa Bonjour ! 012345",color=ink,fontSize=21.sp,fontFamily=fontFamilyForChoice(fontChoice),modifier=Modifier.padding(vertical=12.dp))
-            val choices=listOf("System","San Francisco","Roboto","Rounded","Handwritten","Elegant","Typewriter","Condensed","Light","Bold")
+            Text("Aperçu : Aa Bonjour ! 012345",color=ink,fontSize=21.sp,fontFamily=fontFamilyForChoice(ctx,fontChoice),modifier=Modifier.padding(vertical=12.dp))
+            val choices=listOf("System","San Francisco","Roboto","Rounded","Handwritten","Elegant","Typewriter","Condensed","Lato","Pacifico","Dancing Script","Light","Bold")
             choices.forEach{choice->Row(Modifier.fillMaxWidth().clickable{onFont(choice)}.padding(vertical=10.dp),verticalAlignment=Alignment.CenterVertically){
-                Column(Modifier.weight(1f)){Text(when(choice){"System"->"Police du système";"Handwritten"->"Manuscrite / stylo";"Elegant"->"Élégante";"Typewriter"->"Machine à écrire";else->choice},color=ink,fontFamily=fontFamilyForChoice(choice),fontWeight=if(choice=="Bold")FontWeight.Bold else FontWeight.Normal);Text("Aa Bonjour ! 012345",color=muted,fontSize=12.sp,fontFamily=fontFamilyForChoice(choice))}
+                Column(Modifier.weight(1f)){Text(when(choice){"System"->"Police du système";"Handwritten"->"Manuscrite / stylo";"Elegant"->"Élégante";"Typewriter"->"Machine à écrire";"Pacifico"->"Manuscrite — Pacifico";"Dancing Script"->"Manuscrite — Dancing Script";"Lato"->"Lato";else->choice},color=ink,fontFamily=fontFamilyForChoice(ctx,choice),fontWeight=if(choice=="Bold")FontWeight.Bold else FontWeight.Normal);Text("Aa Bonjour ! 012345",color=muted,fontSize=12.sp,fontFamily=fontFamilyForChoice(choice))}
                 if(fontChoice==choice)Icon(Icons.Default.Check,null,tint=iBlue)
             }}
         }
@@ -581,13 +621,21 @@ class MainActivity:ComponentActivity(){
 @Composable private fun SectionTitle(value:String,color:Color){Text(value,color=color,fontSize=11.sp,fontWeight=FontWeight.Bold,letterSpacing=1.3.sp);Spacer(Modifier.height(9.dp))}
 
 
-private fun fontFamilyForChoice(choice:String):FontFamily=when(choice){
-    "Handwritten"->FontFamily.Cursive
-    "Elegant"->FontFamily.Serif
-    "Typewriter"->FontFamily.Monospace
-    "Rounded"->FontFamily.SansSerif
-    "System"->FontFamily.Default
-    else->FontFamily.SansSerif
+private fun fontFamilyForChoice(ctx:Context,choice:String):FontFamily{
+    val id=when(choice){
+        "San Francisco"->R.font.inter
+        "Roboto"->R.font.roboto
+        "Rounded"->R.font.nunito
+        "Handwritten"->R.font.caveat
+        "Elegant"->R.font.playfair_display
+        "Typewriter"->R.font.source_code_pro
+        "Condensed"->R.font.oswald
+        "Lato"->R.font.lato
+        "Pacifico"->R.font.pacifico
+        "Dancing Script"->R.font.dancing_script
+        else->return FontFamily.Default
+    }
+    return runCatching{FontFamily(Font(id))}.getOrDefault(FontFamily.Default)
 }
 private fun sameCalendarDay(first:Long,second:Long):Boolean{
     val a=java.util.Calendar.getInstance().apply{timeInMillis=first}

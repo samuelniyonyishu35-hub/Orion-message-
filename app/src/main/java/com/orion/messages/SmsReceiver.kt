@@ -6,7 +6,13 @@ import android.content.Intent
 
 class SmsReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        // Android delivers SMS to the default SMS app through this receiver.
-        // Inbox persistence and multipart parsing are planned for the next iteration.
+        // Android routes incoming SMS here when ORION is the default SMS app.
+        // Inbox persistence and multipart decoding are the next implementation step.
+    }
+}
+
+class MmsReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        // MMS delivery entry point; MMS parsing is not implemented in this build.
     }
 }

@@ -451,6 +451,21 @@ class MainActivity:ComponentActivity(){
             ProfileAction("message",Icons.Default.Message,Modifier.weight(1f),surface,ink){}
             ProfileAction("appeler",Icons.Default.Call,Modifier.weight(1f),surface,ink){call(number)}
         }
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)){
+            ProfileAction(if(contact==null)"Enregistrer" else "Ajouter contact",Icons.Default.PersonAdd,Modifier.weight(1f),surface,ink){
+                val i=Intent(Intent.ACTION_INSERT).setType(ContactsContract.Contacts.CONTENT_TYPE).apply{putExtra(ContactsContract.Intents.Insert.PHONE,number);if(contact!=null)putExtra(ContactsContract.Intents.Insert.NAME,contact.name)}
+                runCatching{ctx.startActivity(i)}.onFailure{onBlockResult("Impossible d'ouvrir les contacts")}
+            }
+            ProfileAction("Partager",Icons.Default.Share,Modifier.weight(1f),surface,ink){
+                val i=Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,number)
+                runCatching{ctx.startActivity(Intent.createChooser(i,"Partager ce numéro avec"))}
+            }
+        }
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)){
+            ProfileAction("WhatsApp",Icons.Default.Chat,Modifier.weight(1f),surface,ink){runCatching{ctx.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://wa.me/"+number.filter{it.isDigit()})))}}
+            ProfileAction("E-mail",Icons.Default.Email,Modifier.weight(1f),surface,ink){val i=Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:")).putExtra(Intent.EXTRA_TEXT,number);runCatching{ctx.startActivity(Intent.createChooser(i,"Envoyer par e-mail"))}}
+        }
         Spacer(Modifier.height(25.dp));HorizontalDivider(color=muted.copy(alpha=.3f))
         Column(Modifier.fillMaxWidth().padding(vertical=17.dp)){
             Text("INFORMATIONS",fontSize=11.sp,color=muted,fontWeight=FontWeight.Bold,letterSpacing=1.2.sp)

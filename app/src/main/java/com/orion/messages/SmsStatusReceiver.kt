@@ -23,7 +23,7 @@ class SmsStatusReceiver : BroadcastReceiver() {
                     values.put(Telephony.Sms.STATUS, Telephony.Sms.STATUS_FAILED)
                 }
             }
-            ACTION_DELIVERED -> values.put(Telephony.Sms.STATUS, Telephony.Sms.STATUS_COMPLETE)
+            ACTION_DELIVERED -> { if (resultCode == Activity.RESULT_OK) values.put(Telephony.Sms.STATUS, Telephony.Sms.STATUS_COMPLETE) else return }
             else -> return
         }
         runCatching { context.contentResolver.update(uri, values, null, null) }

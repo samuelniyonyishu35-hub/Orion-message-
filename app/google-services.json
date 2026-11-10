@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1011965803403",
+    "project_id": "orion-message",
+    "storage_bucket": "orion-message.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1011965803403:android:11235be7560a3464b6cd8e",
+        "android_client_info": {
+          "package_name": "com.orion.messages"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAPqh42wyXpQYmoxkwEd5p-Qts5NwyGAAk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -286,7 +286,7 @@ class MainActivity:ComponentActivity(){
                             }catch(e:Exception){status="Impossible d'ouvrir l'envoi MMS : ${e.localizedMessage ?: "application compatible introuvable"}"}
                         },ink,muted,surface,
                         {page="profile"},{call(screen.thread!!.address.ifBlank{number})},{
-                            val dest=thread!!.address.ifBlank{number}.trim()
+                            val dest=screen.thread!!.address.ifBlank{number}.trim()
                             if(photoUri!=null)status="Utilise le bouton Envoyer pour joindre la photo."
                             else if(dest.isBlank())status="Saisis le numéro du destinataire."
                             else if(draft.isBlank())status="Écris un message."

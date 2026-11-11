@@ -457,7 +457,8 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
             }
         }else LazyColumn(state=listState,contentPadding=PaddingValues(bottom=100.dp)){
             items(matchingThreads,key={it.address}){item->
-                Box(Modifier.fillMaxWidth().tunnelScrollEffect(listState,item.address).animateContentSize(animationSpec=spring(dampingRatio=0.82f,stiffness=420f)).combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}) .background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent)){\n                Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
+                Box(Modifier.fillMaxWidth().tunnelScrollEffect(listState,item.address).animateContentSize(animationSpec=spring(dampingRatio=0.82f,stiffness=420f)).combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}) .background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent){
+                Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
                     if(selectedThreads.contains(item.address))Icon(Icons.Default.CheckCircle,null,tint=iBlue,modifier=Modifier.size(50.dp).padding(12.dp)) else ContactAvatar(ctx,item.address,item.displayName,50)
                     Spacer(Modifier.width(13.dp))
                     Column(Modifier.weight(1f)){
@@ -467,7 +468,8 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
                     if(item.unreadCount>0)Box(Modifier.padding(end=8.dp).size(18.dp).clip(CircleShape).background(iBlue),contentAlignment=Alignment.Center){Text(if(item.unreadCount>99)"99+" else item.unreadCount.toString(),color=Color.White,fontSize=if(item.unreadCount>9)7.sp else 9.sp,fontWeight=FontWeight.Bold,maxLines=1,letterSpacing=(-0.4).sp)}
                     Icon(Icons.Default.ChevronRight,null,tint=muted)
                 }
-                }\n                HorizontalDivider(color=muted.copy(alpha=.2f))
+                }
+                HorizontalDivider(color=muted.copy(alpha=.2f))
             }
         }
     }

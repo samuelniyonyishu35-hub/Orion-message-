@@ -1183,7 +1183,7 @@ private fun deleteConversation(ctx:Context,address:String):Int{
     return deleteSmsByIds(ctx,ids.toSet())
 }
 private fun shareSamSimApp(ctx:Context){
-    val downloadUrl="https://github.com/samuelniyonyishu35-hub/Orion-message-/releases/latest"
+    val downloadUrl="https://github.com/samuelniyonyishu35-hub/Orion-message-/releases/latest/download/app-debug.apk"
     val message="Découvre SamSim, l’application de messagerie pour Android. Télécharge-la ici : $downloadUrl"
     val sendIntent=Intent(Intent.ACTION_SEND).setType("text/plain")
         .putExtra(Intent.EXTRA_SUBJECT,"Découvrir SamSim")

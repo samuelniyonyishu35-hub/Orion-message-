@@ -45,6 +45,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -457,13 +458,26 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
             }
         }else LazyColumn(state=listState,contentPadding=PaddingValues(bottom=100.dp)){
             items(matchingThreads,key={it.address}){item->
-                Box(Modifier.fillMaxWidth().tunnelScrollEffect(listState,item.address).animateContentSize(animationSpec=spring(dampingRatio=0.82f,stiffness=420f)).combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}) .background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent)){
-                Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
+                val isSelected=selectedThreads.contains(item.address)
+                Box(
+                    Modifier.fillMaxWidth()
+                        .discussionTunnelScrollEffect(listState,item.address)
+                        .padding(horizontal=8.dp,vertical=3.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(if(isSelected)iBlue.copy(alpha=.12f) else Color.Transparent)
+                        .border(if(isSelected)1.dp else 0.dp,if(isSelected)iBlue.copy(alpha=.30f) else Color.Transparent,RoundedCornerShape(18.dp))
+                        .animateContentSize(animationSpec=spring(dampingRatio=0.86f,stiffness=420f))
+                        .combinedClickable(
+                            onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(isSelected)selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},
+                            onLongClick={selectedThreads=selectedThreads+item.address}
+                        )
+                ){
+                Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
                     if(selectedThreads.contains(item.address))Icon(Icons.Default.CheckCircle,null,tint=iBlue,modifier=Modifier.size(50.dp).padding(12.dp)) else ContactAvatar(ctx,item.address,item.displayName,50)
                     Spacer(Modifier.width(13.dp))
                     Column(Modifier.weight(1f)){
                         Text(item.displayName,color=ink,fontSize=16.sp,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)
-                        Spacer(Modifier.height(3.dp));Text(item.body.ifBlank{"Message de ${item.displayName}"},color=muted,fontSize=14.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(3.dp));Text(item.body.ifBlank{"Message de ${item.displayName}"},color=muted,fontSize=15.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                     }
                     if(item.unreadCount>0)Box(Modifier.padding(end=8.dp).size(18.dp).clip(CircleShape).background(iBlue),contentAlignment=Alignment.Center){Text(if(item.unreadCount>99)"99+" else item.unreadCount.toString(),color=Color.White,fontSize=if(item.unreadCount>9)7.sp else 9.sp,fontWeight=FontWeight.Bold,maxLines=1,letterSpacing=(-0.4).sp)}
                     Icon(Icons.Default.ChevronRight,null,tint=muted)
@@ -1006,13 +1020,29 @@ private fun Modifier.tunnelScrollEffect(state:LazyListState,itemKey:String):Modi
         val progress=((center-state.layoutInfo.viewportStartOffset)/height).coerceIn(0f,1f)
         val depth=1f-progress
         val curve=depth*depth
-        // Stronger 3D tunnel: the first row stays almost natural, rows farther down recede visibly.
         scaleX=0.72f+curve*0.28f
         scaleY=0.62f+curve*0.38f
         alpha=0.28f+curve*0.72f
         rotationX=(1f-curve)*29f
         translationY=(1f-curve)*22f
         cameraDistance=28f*density
+    }
+}
+
+private fun Modifier.discussionTunnelScrollEffect(state:LazyListState,itemKey:String):Modifier = graphicsLayer {
+    val visible=state.layoutInfo.visibleItemsInfo.firstOrNull{it.key==itemKey}
+    if(visible!=null){
+        val height=(state.layoutInfo.viewportEndOffset-state.layoutInfo.viewportStartOffset).toFloat().coerceAtLeast(1f)
+        val viewportCenter=state.layoutInfo.viewportStartOffset+height/2f
+        val itemCenter=visible.offset+visible.size/2f
+        // The discussion tunnel begins at the vertical center; rows above it remain undistorted.
+        val progress=((itemCenter-viewportCenter)/(height/2f)).coerceIn(0f,1f)
+        scaleX=1f-progress*0.10f
+        scaleY=1f-progress*0.12f
+        alpha=1f-progress*0.28f
+        rotationX=progress*10f
+        translationY=progress*7f
+        cameraDistance=24f*density
     }
 }
 

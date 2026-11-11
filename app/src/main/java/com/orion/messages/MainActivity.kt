@@ -96,6 +96,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 private val iBlue = Color(0xFF087CFA)
 private val iGray = Color(0xFF8E8E93)
@@ -720,6 +721,12 @@ class MainActivity:ComponentActivity(){
             var backupStatus by remember { mutableStateOf(backupPrefs.getString("last_result", "Aucune sauvegarde effectuée.") ?: "Aucune sauvegarde effectuée.") }
             LaunchedEffect(googleEmail,autoBackup) {
                 OrionBackupScheduler.scheduleAutomatic(ctx, autoBackup && googleEmail != null)
+            }
+            LaunchedEffect(Unit) {
+                while (true) {
+                    backupStatus = backupPrefs.getString("last_result", "Aucune sauvegarde effectuée.") ?: "Aucune sauvegarde effectuée."
+                    delay(1500)
+                }
             }
             Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.Backup,null,tint=iBlue);Spacer(Modifier.width(8.dp));Text("Sauvegarder et restaurer les SMS",color=ink,fontSize=14.sp,fontWeight=FontWeight.SemiBold)}
             Text("Les sauvegardes sont privées et liées au compte Google connecté. ORION ne transmet aucun SMS sans cette fonction activée.",color=muted,fontSize=11.sp,modifier=Modifier.padding(top=5.dp))

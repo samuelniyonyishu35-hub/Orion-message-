@@ -1025,6 +1025,11 @@ private fun formatInternationalPhone(raw:String):String{
     }
 }
 @Composable private fun AboutScreen(mod:Modifier,surface:Color,ink:Color,muted:Color){
+    val ctx=LocalContext.current
+    val installedVersion=remember {
+        runCatching { ctx.packageManager.getPackageInfo(ctx.packageName,0).versionName }
+            .getOrNull()?.takeIf { it.isNotBlank() } ?: "Inconnue"
+    }
     Column(mod.padding(horizontal=20.dp),horizontalAlignment=Alignment.CenterHorizontally){
         Spacer(Modifier.height(38.dp))
         Box(Modifier.size(94.dp).clip(RoundedCornerShape(26.dp)).background(Brush.linearGradient(listOf(Color(0xFF68A8FF),Color(0xFF0756C9)))),contentAlignment=Alignment.Center){
@@ -1037,7 +1042,7 @@ private fun formatInternationalPhone(raw:String):String{
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(18.dp)){
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
                 Text("Version",color=ink,modifier=Modifier.weight(1f))
-                Text("1.0",color=muted,fontWeight=FontWeight.SemiBold)
+                Text(installedVersion,color=muted,fontWeight=FontWeight.SemiBold)
             }
             HorizontalDivider(Modifier.padding(vertical=13.dp),color=muted.copy(alpha=.25f))
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){

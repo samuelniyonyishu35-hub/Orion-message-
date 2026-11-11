@@ -17,6 +17,28 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Restore persistent ORION signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ORION_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ORION_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ORION_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ORION_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing GitHub Actions secret: $name"
+              exit 1
+            fi
+          done
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/orion-release.jks"
+          test -s "$RUNNER_TEMP/orion-release.jks"
+          {
+            printf 'ORION_STORE_FILE=%s\n' "$RUNNER_TEMP/orion-release.jks"
+            printf 'ORION_STORE_PASSWORD=%s\n' "$KEYSTORE_PASSWORD"
+            printf 'ORION_KEY_ALIAS=%s\n' "$KEY_ALIAS"
+            printf 'ORION_KEY_PASSWORD=%s\n' "$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
       - name: Download bundled fonts
         run: |
           mkdir -p app/src/main/res/font app/src/main/assets/font-licenses

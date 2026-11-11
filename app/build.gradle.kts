@@ -5,6 +5,8 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+val orionStoreFile = System.getenv("ORION_STORE_FILE")
+
 android {
     namespace = "com.orion.messages"
     compileSdk = 35
@@ -14,6 +16,23 @@ android {
         targetSdk = 35
         versionCode = 2
         versionName = "1.0.1"
+    }
+    signingConfigs {
+        if (orionStoreFile != null) {
+            create("orion") {
+                storeFile = file(orionStoreFile)
+                storePassword = System.getenv("ORION_STORE_PASSWORD")
+                keyAlias = System.getenv("ORION_KEY_ALIAS")
+                keyPassword = System.getenv("ORION_KEY_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        getByName("debug") {
+            if (orionStoreFile != null) {
+                signingConfig = signingConfigs.getByName("orion")
+            }
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

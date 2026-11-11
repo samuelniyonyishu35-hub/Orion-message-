@@ -267,7 +267,7 @@ class MainActivity:ComponentActivity(){
     var fontChoice by remember{mutableStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getString("font","System")?:"System")}
     var fontScale by remember{mutableFloatStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getFloat("font_scale",1f))}
     var scrollEffectEnabled by remember{mutableStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getBoolean("scroll_effect_enabled",true))}
-    var scrollEffectIntensity by remember{mutableFloatStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getFloat("scroll_effect_intensity",0.65f))}
+    var scrollEffectIntensity by remember{mutableFloatStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getFloat("scroll_effect_intensity",1f))}
     val baseDensity=LocalDensity.current
     val appFont=fontFamilyForChoice(ctx,fontChoice)
     val appWeight=when(fontChoice){"Light"->FontWeight.Light;"Bold"->FontWeight.Bold;else->FontWeight.Normal}
@@ -491,7 +491,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
     }
 }
 
-@Composable private fun NewMessageScreen(mod:Modifier,contacts:List<ContactItem>,query:String,onQuery:(String)->Unit,onContact:(ContactItem)->Unit,onSubmit:(String)->Unit,notice:String,onNotice:(String)->Unit,scrollEffectEnabled:Boolean=true,scrollEffectIntensity:Float=0.65f){
+@Composable private fun NewMessageScreen(mod:Modifier,contacts:List<ContactItem>,query:String,onQuery:(String)->Unit,onContact:(ContactItem)->Unit,onSubmit:(String)->Unit,notice:String,onNotice:(String)->Unit,scrollEffectEnabled:Boolean=true,scrollEffectIntensity:Float=1f){
     val normalized=query.filter{it.isDigit()}
     val filtered=contacts.filter{query.isBlank()||it.name.contains(query,true)||it.number.contains(query,true)||(normalized.length>=2&&it.number.filter{ch->ch.isDigit()}.contains(normalized))}
     Column(mod.padding(horizontal=16.dp)){

@@ -508,7 +508,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
             val contactsListState= rememberLazyListState()
             LazyColumn(state=contactsListState,contentPadding=PaddingValues(bottom=28.dp)){
             items(filtered,key={it.number}){contact->
-                Row(Modifier.fillMaxWidth().tunnelScrollEffect(contactsListState,contact.number).clickable{onContact(contact)}.padding(vertical=11.dp),verticalAlignment=Alignment.CenterVertically){
+                Row(Modifier.fillMaxWidth().discussionTunnelScrollEffect(contactsListState,contact.number).clickable{onContact(contact)}.padding(vertical=11.dp),verticalAlignment=Alignment.CenterVertically){
                     Avatar(contact.name,46)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)){

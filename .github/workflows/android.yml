@@ -6,6 +6,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  pages: write
+  id-token: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -81,3 +83,20 @@ jobs:
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
           files: app/build/outputs/apk/debug/app-debug.apk
+
+  deploy-download-page:
+    if: github.ref == 'refs/heads/feature/sms-cloud-backup'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload SamSim download page
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - name: Publish SamSim download page
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -39,6 +39,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.animation.animateContentSize
@@ -312,11 +313,11 @@ class MainActivity:ComponentActivity(){
                     val returning=targetState.page in setOf("home","settings","chat") &&
                         (initialState.page in setOf("chat","profile","about","compose","settings"))
                     if(returning) {
-                        (slideInHorizontally(initialOffsetX={-it/5},animationSpec=tween(380,easing=FastOutSlowInEasing))+fadeIn(tween(320,easing=FastOutSlowInEasing))) togetherWith
-                            (slideOutHorizontally(targetOffsetX={it/5},animationSpec=tween(340,easing=FastOutSlowInEasing))+fadeOut(tween(260)))
+                        (slideInHorizontally(initialOffsetX={-it/3},animationSpec=spring(dampingRatio=0.78f,stiffness=360f))+fadeIn(tween(220))) togetherWith
+                            (slideOutHorizontally(targetOffsetX={it/4},animationSpec=tween(210,easing=FastOutSlowInEasing))+fadeOut(tween(170)))
                     } else {
-                        (slideInHorizontally(initialOffsetX={it/5},animationSpec=tween(380,easing=FastOutSlowInEasing))+fadeIn(tween(320,easing=FastOutSlowInEasing))) togetherWith
-                            (slideOutHorizontally(targetOffsetX={-it/5},animationSpec=tween(340,easing=FastOutSlowInEasing))+fadeOut(tween(260)))
+                        (slideInHorizontally(initialOffsetX={it/3},animationSpec=spring(dampingRatio=0.78f,stiffness=360f))+fadeIn(tween(220))) togetherWith
+                            (slideOutHorizontally(targetOffsetX={-it/4},animationSpec=tween(210,easing=FastOutSlowInEasing))+fadeOut(tween(170)))
                     }
                 },label="orion-page"
             ){screen->
@@ -432,8 +433,8 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
                 Text(if(query.isBlank())"Touchez le bouton pour commencer." else "Essaie un autre nom ou numéro.",color=muted,fontSize=13.sp)
             }
         }else LazyColumn(state=listState,contentPadding=PaddingValues(bottom=100.dp)){
-            items(matchingThreads){item->
-                Row(Modifier.fillMaxWidth().combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}).background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
+            items(matchingThreads,key={it.address}){item->
+                Row(Modifier.fillMaxWidth().animateContentSize(animationSpec=spring(dampingRatio=0.82f,stiffness=420f)).combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}).background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
                     if(selectedThreads.contains(item.address))Icon(Icons.Default.CheckCircle,null,tint=iBlue,modifier=Modifier.size(50.dp).padding(12.dp)) else ContactAvatar(ctx,item.address,item.displayName,50)
                     Spacer(Modifier.width(13.dp))
                     Column(Modifier.weight(1f)){

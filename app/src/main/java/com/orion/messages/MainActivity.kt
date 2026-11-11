@@ -74,6 +74,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -105,7 +107,7 @@ private val iGray = Color(0xFF8E8E93)
 private val iLight = Color(0xFFF2F2F7)
 private val iDark = Color(0xFF000000)
 
-data class ThreadItem(val address:String,val body:String,val date:Long,val displayName:String=address)
+data class ThreadItem(val address:String,val body:String,val date:Long,val displayName:String=address,val unreadCount:Int=0)
 data class SmsRecord(val id:Long,val body:String,val date:Long,val type:Int,val status:Int)
 data class BackupSms(val address:String,val body:String,val date:Long,val type:Int,val status:Int,val read:Boolean)
 data class ContactItem(val name:String,val number:String)
@@ -259,6 +261,8 @@ class MainActivity:ComponentActivity(){
     val homeListState=rememberLazyListState()
     val messages=remember(tick,thread?.address){thread?.address?.takeIf{it.isNotBlank()}?.let{readMessages(ctx,it)}?: emptyList()}
     var fontChoice by remember{mutableStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getString("font","System")?:"System")}
+    var fontScale by remember{mutableFloatStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getFloat("font_scale",1f))}
+    val baseDensity=LocalDensity.current
     val appFont=fontFamilyForChoice(ctx,fontChoice)
     val appWeight=when(fontChoice){"Light"->FontWeight.Light;"Bold"->FontWeight.Bold;else->FontWeight.Normal}
     val contacts=remember(tick){readContacts(ctx)}
@@ -286,6 +290,7 @@ class MainActivity:ComponentActivity(){
             bars.isAppearanceLightNavigationBars=!dark
         }
     }
+    CompositionLocalProvider(LocalDensity provides Density(baseDensity.density,fontScale=fontScale)) {
     MaterialTheme(colorScheme=if(dark)darkColorScheme(primary=iBlue,background=bg,surface=surface) else lightColorScheme(primary=iBlue,background=bg,surface=surface),typography=Typography().copy(bodyLarge=Typography().bodyLarge.copy(fontFamily=appFont,fontWeight=appWeight),bodyMedium=Typography().bodyMedium.copy(fontFamily=appFont,fontWeight=appWeight),bodySmall=Typography().bodySmall.copy(fontFamily=appFont,fontWeight=appWeight),titleLarge=Typography().titleLarge.copy(fontFamily=appFont,fontWeight=appWeight))){
         Scaffold(containerColor=bg,topBar={
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) { when {
@@ -324,12 +329,12 @@ class MainActivity:ComponentActivity(){
             ){screen->
                 val screenMessages=remember(screen.thread?.address,tick){screen.thread?.address?.takeIf{it.isNotBlank()}?.let{readMessages(ctx,it)}?: emptyList()}
                 when {
-                    screen.page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,themeMode,{mode->themeMode=mode;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("theme_mode",mode).apply()},ownerName,{value->ownerName=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_name",value).apply()},ownerPhone,{value->ownerPhone=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_phone",value).apply()},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},setDefault,{page="about"},googleEmail,googleBusy,googleMessage,onGoogleSignIn,onGoogleSignOut)
+                    screen.page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,themeMode,{mode->themeMode=mode;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("theme_mode",mode).apply()},ownerName,{value->ownerName=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_name",value).apply()},ownerPhone,{value->ownerPhone=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_phone",value).apply()},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},fontScale,{value->fontScale=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putFloat("font_scale",value).apply()},setDefault,{page="about"},googleEmail,googleBusy,googleMessage,onGoogleSignIn,onGoogleSignOut)
                     screen.page=="about" -> AboutScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted)
                     screen.page=="profile" && screen.thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),screen.thread,contacts,ink,muted,surface,ctx,call,{page="chat"},{message->status=message})
                     screen.page=="compose" -> NewMessageScreen(Modifier.fillMaxSize().padding(pad),contacts,composeQuery,{composeQuery=it;composeNotice=""},{contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;draft="";page="chat";status=""},{raw->val cleaned=raw.trim();val digits=cleaned.filter{it.isDigit()};val found=contacts.firstOrNull{it.name.equals(cleaned,true)||it.number.filter{ch->ch.isDigit()}==digits}?:contacts.firstOrNull{it.name.startsWith(cleaned,true)};if(found!=null||digits.length in 7..15){val dest=found?.number?:cleaned;val label=found?.name?:dest;thread=ThreadItem(dest,"",0,label);number=dest;draft="";page="chat";status=""}else composeNotice="Aucun contact correspondant. Vérifie le nom ou saisis un numéro valide."},composeNotice,{composeNotice=it})
                     screen.thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,conversations,contacts,query,{query=it},homeListState,
-                        {item->thread=item;number=item.address;page="chat";status=""},
+                        {item->markConversationRead(ctx,item.address);refresh();thread=item.copy(unreadCount=0);number=item.address;page="chat";status=""},
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
                     else -> ChatScreen(Modifier.fillMaxSize().padding(pad).imePadding(),screen.thread,screenMessages,appFont,appWeight,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
                         {photoPicker.launch("image/*")},{cameraPicker.launch(null)},{photoUri=null},{uri->
@@ -360,6 +365,7 @@ class MainActivity:ComponentActivity(){
                 }
             }
         }
+    }
     }
 }
 
@@ -435,29 +441,14 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
             }
         }else LazyColumn(state=listState,contentPadding=PaddingValues(bottom=100.dp)){
             items(matchingThreads,key={it.address}){item->
-                Row(Modifier.fillMaxWidth().graphicsLayer {
-                    val visible = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == item.address }
-                    if (visible != null) {
-                        val viewportHeight = (listState.layoutInfo.viewportEndOffset - listState.layoutInfo.viewportStartOffset).toFloat().coerceAtLeast(1f)
-                        val itemCenter = visible.offset + visible.size / 2f
-                        // Le tunnel part du haut de la liste : le premier élément visible reste net,
-                        // puis la profondeur augmente progressivement vers le bas pendant le défilement.
-                        val progressFromTop = ((itemCenter - listState.layoutInfo.viewportStartOffset) / viewportHeight).coerceIn(0f, 1f)
-                        val depth = 1f - progressFromTop
-                        scaleX = 0.84f + depth * 0.16f
-                        scaleY = 0.78f + depth * 0.22f
-                        alpha = 0.38f + depth * 0.62f
-                        rotationX = progressFromTop * 17f
-                        translationY = progressFromTop * 13f
-                        cameraDistance = 18f * density
-                    }
-                }.animateContentSize(animationSpec=spring(dampingRatio=0.82f,stiffness=420f)).combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}).background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
+                Row(Modifier.fillMaxWidth().tunnelScrollEffect(listState,item.address).animateContentSize(animationSpec=spring(dampingRatio=0.82f,stiffness=420f)).combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}).background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
                     if(selectedThreads.contains(item.address))Icon(Icons.Default.CheckCircle,null,tint=iBlue,modifier=Modifier.size(50.dp).padding(12.dp)) else ContactAvatar(ctx,item.address,item.displayName,50)
                     Spacer(Modifier.width(13.dp))
                     Column(Modifier.weight(1f)){
                         Text(item.displayName,color=ink,fontSize=16.sp,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)
                         Spacer(Modifier.height(3.dp));Text(item.body.ifBlank{"Message de ${item.displayName}"},color=muted,fontSize=14.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                     }
+                    if(item.unreadCount>0)Box(Modifier.padding(end=8.dp).sizeIn(minWidth=22.dp,minHeight=22.dp).clip(CircleShape).background(iBlue),contentAlignment=Alignment.Center){Text(item.unreadCount.toString(),color=Color.White,fontSize=11.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(horizontal=5.dp,vertical=2.dp))}
                     Icon(Icons.Default.ChevronRight,null,tint=muted)
                 }
                 HorizontalDivider(color=muted.copy(alpha=.2f),modifier=Modifier.padding(start=63.dp))
@@ -481,9 +472,11 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
                 Text(if(query.isBlank())"Aucun contact disponible" else "Aucun contact trouvé",color=iGray,fontWeight=FontWeight.Medium)
                 if(query.isNotBlank())Text("Appuie sur Entrée pour utiliser ce nom ou ce numéro.",color=iGray,fontSize=12.sp,modifier=Modifier.padding(top=5.dp))
             }
-        }else LazyColumn(contentPadding=PaddingValues(bottom=28.dp)){
+        }else {
+            val contactsListState= rememberLazyListState()
+            LazyColumn(state=contactsListState,contentPadding=PaddingValues(bottom=28.dp)){
             items(filtered,key={it.number}){contact->
-                Row(Modifier.fillMaxWidth().clickable{onContact(contact)}.padding(vertical=11.dp),verticalAlignment=Alignment.CenterVertically){
+                Row(Modifier.fillMaxWidth().tunnelScrollEffect(contactsListState,contact.number).clickable{onContact(contact)}.padding(vertical=11.dp),verticalAlignment=Alignment.CenterVertically){
                     Avatar(contact.name,46)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)){
@@ -493,6 +486,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
                     Icon(Icons.Default.Message,null,tint=iBlue)
                 }
                 HorizontalDivider(color=iGray.copy(alpha=.18f),modifier=Modifier.padding(start=58.dp))
+            }
             }
         }
     }
@@ -697,7 +691,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
     }
 }
 
-@Composable private fun SettingsScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,themeMode:String,onThemeMode:(String)->Unit,ownerName:String,onOwnerName:(String)->Unit,ownerPhone:String,onOwnerPhone:(String)->Unit,sims:List<SimChoice>,selected:Int,onSim:(Int)->Unit,fontChoice:String,onFont:(String)->Unit,onDefault:()->Unit,onAbout:()->Unit,googleEmail:String?,googleBusy:Boolean,googleMessage:String?,onGoogleSignIn:()->Unit,onGoogleSignOut:()->Unit){
+@Composable private fun SettingsScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,themeMode:String,onThemeMode:(String)->Unit,ownerName:String,onOwnerName:(String)->Unit,ownerPhone:String,onOwnerPhone:(String)->Unit,sims:List<SimChoice>,selected:Int,onSim:(Int)->Unit,fontChoice:String,onFont:(String)->Unit,fontScale:Float,onFontScale:(Float)->Unit,onDefault:()->Unit,onAbout:()->Unit,googleEmail:String?,googleBusy:Boolean,googleMessage:String?,onGoogleSignIn:()->Unit,onGoogleSignOut:()->Unit){
     var previewChoice by remember(fontChoice){mutableStateOf(fontChoice)}
     val choices=listOf("System","San Francisco","Roboto","Rounded","Handwritten","Elegant","Typewriter","Condensed","Lato","Pacifico","Dancing Script","Light","Bold")
     fun fontLabel(choice:String)=when(choice){"System"->"Police du système";"San Francisco"->"Style San Francisco (Inter)";"Handwritten"->"Manuscrite / stylo";"Elegant"->"Élégante";"Typewriter"->"Machine à écrire";"Pacifico"->"Manuscrite — Pacifico";"Dancing Script"->"Manuscrite — Dancing Script";else->choice}
@@ -827,6 +821,10 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
         Spacer(Modifier.height(22.dp));SectionTitle("POLICE D’ÉCRITURE",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
             Text("Choisis une police pour voir son aperçu immédiatement.",color=ink,fontWeight=FontWeight.SemiBold)
+            Text("TAILLE DU TEXTE · ${(fontScale*100).toInt()} %",color=muted,fontSize=10.sp,fontWeight=FontWeight.Bold,letterSpacing=1.sp,modifier=Modifier.padding(top=16.dp))
+            Slider(value=fontScale,onValueChange=onFontScale,valueRange=0.8f..1.4f,steps=11,modifier=Modifier.fillMaxWidth())
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text("Petite",color=muted,fontSize=11.sp);Text("Normale",color=muted,fontSize=11.sp);Text("Grande",color=muted,fontSize=11.sp)}
+            Text("Aperçu de la taille choisie",color=ink,fontSize=16.sp,modifier=Modifier.padding(top=8.dp))
             Text("POLICE ACTUELLEMENT UTILISÉE",color=muted,fontSize=10.sp,fontWeight=FontWeight.Bold,letterSpacing=1.sp,modifier=Modifier.padding(top=14.dp))
             Text(fontLabel(fontChoice),color=iBlue,fontSize=13.sp,fontWeight=FontWeight.SemiBold)
             Text("Aa Bonjour ! 012345",color=ink,fontSize=25.sp,fontFamily=fontFamilyForChoice(ctx,fontChoice),fontWeight=weightFor(fontChoice),modifier=Modifier.padding(top=5.dp,bottom=12.dp))
@@ -964,11 +962,38 @@ private fun readThreads(ctx:Context):List<ThreadItem>{
     if(ContextCompat.checkSelfPermission(ctx,Manifest.permission.READ_SMS)!=PackageManager.PERMISSION_GRANTED)return emptyList()
     val names=readContacts(ctx).associate{normalizePhone(it.number) to it.name}
     val out=mutableListOf<ThreadItem>()
-    try{ctx.contentResolver.query(Telephony.Sms.CONTENT_URI,arrayOf(Telephony.Sms.ADDRESS,Telephony.Sms.BODY,Telephony.Sms.DATE),null,null,Telephony.Sms.DATE+" DESC")?.use{c->
-        val ai=c.getColumnIndex(Telephony.Sms.ADDRESS);val bi=c.getColumnIndex(Telephony.Sms.BODY);val di=c.getColumnIndex(Telephony.Sms.DATE);val seen=mutableSetOf<String>()
-        while(c.moveToNext()&&out.size<100){val a=if(ai>=0)c.getString(ai)?:"Inconnu" else "Inconnu";if(seen.add(a))out.add(ThreadItem(a,if(bi>=0)c.getString(bi)?:"" else "",if(di>=0)c.getLong(di) else 0L,names[normalizePhone(a)]?:senderLabel(a)))}
+    val unreadByAddress=mutableMapOf<String,Int>()
+    try{ctx.contentResolver.query(Telephony.Sms.CONTENT_URI,arrayOf(Telephony.Sms.ADDRESS,Telephony.Sms.BODY,Telephony.Sms.DATE,Telephony.Sms.READ,Telephony.Sms.TYPE),null,null,Telephony.Sms.DATE+" DESC")?.use{c->
+        val ai=c.getColumnIndex(Telephony.Sms.ADDRESS);val bi=c.getColumnIndex(Telephony.Sms.BODY);val di=c.getColumnIndex(Telephony.Sms.DATE);val ri=c.getColumnIndex(Telephony.Sms.READ);val ti=c.getColumnIndex(Telephony.Sms.TYPE);val seen=mutableSetOf<String>()
+        while(c.moveToNext()){
+            val a=if(ai>=0)c.getString(ai)?:"Inconnu" else "Inconnu"
+            val key=normalizePhone(a)
+            if(ri>=0&&c.getInt(ri)==0&&(ti<0||c.getInt(ti)==Telephony.Sms.MESSAGE_TYPE_INBOX))unreadByAddress[key]=(unreadByAddress[key]?:0)+1
+            if(out.size<100&&seen.add(key))out.add(ThreadItem(a,if(bi>=0)c.getString(bi)?:"" else "",if(di>=0)c.getLong(di) else 0L,names[key]?:senderLabel(a),unreadByAddress[key]?:0))
+        }
     }}catch(_:Exception){}
-    return out
+    return out.map{it.copy(unreadCount=unreadByAddress[normalizePhone(it.address)]?:0)}
+}
+
+private fun markConversationRead(ctx:Context,address:String){
+    if(Telephony.Sms.getDefaultSmsPackage(ctx)!=ctx.packageName)return
+    runCatching{val values=ContentValues().apply{put(Telephony.Sms.READ,1);put(Telephony.Sms.SEEN,1)};ctx.contentResolver.update(Telephony.Sms.CONTENT_URI,values,"address = ? AND read = 0 AND type = ?",arrayOf(address,Telephony.Sms.MESSAGE_TYPE_INBOX.toString()))}
+}
+
+private fun Modifier.tunnelScrollEffect(state:LazyListState,itemKey:String):Modifier = graphicsLayer {
+    val visible=state.layoutInfo.visibleItemsInfo.firstOrNull{it.key==itemKey}
+    if(visible!=null){
+        val height=(state.layoutInfo.viewportEndOffset-state.layoutInfo.viewportStartOffset).toFloat().coerceAtLeast(1f)
+        val center=visible.offset+visible.size/2f
+        val progress=((center-state.layoutInfo.viewportStartOffset)/height).coerceIn(0f,1f)
+        val depth=1f-progress
+        scaleX=0.84f+depth*0.16f
+        scaleY=0.78f+depth*0.22f
+        alpha=0.38f+depth*0.62f
+        rotationX=progress*17f
+        translationY=progress*13f
+        cameraDistance=18f*density
+    }
 }
 
 private fun copyTextToClipboard(ctx:Context,text:String):Boolean{

@@ -836,6 +836,28 @@ private fun formatInternationalPhone(raw:String):String{
                 Icon(Icons.Default.Share,null);Spacer(Modifier.width(8.dp));Text("Partager l’application")
             }
         }
+        Spacer(Modifier.height(22.dp));SectionTitle("DÉVELOPPEUR",muted)
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
+            Row(verticalAlignment=Alignment.CenterVertically){
+                Box(Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(iBlue),contentAlignment=Alignment.Center){
+                    Icon(Icons.Default.Code,null,tint=Color.White)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)){
+                    Text("Développé par Samuel",color=ink,fontWeight=FontWeight.SemiBold)
+                    Text("Créateur de SamSim",color=muted,fontSize=12.sp)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text("Contact us : samuelniyonyishu35@gmail.com",color=muted,fontSize=13.sp)
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(onClick={
+                runCatching{ctx.startActivity(Intent(Intent.ACTION_SENDTO,Uri.parse("mailto:samuelniyonyishu35@gmail.com?subject=Contact%20SamSim")))}
+                    .onFailure{Toast.makeText(ctx,"Aucune application e-mail disponible.",Toast.LENGTH_LONG).show()}
+            },modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){
+                Icon(Icons.Default.Email,null);Spacer(Modifier.width(8.dp));Text("Contacter le développeur")
+            }
+        }
         Spacer(Modifier.height(22.dp));SectionTitle("CARTES SIM",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
             Text("SIM pour les nouveaux messages",color=ink,fontWeight=FontWeight.SemiBold);Spacer(Modifier.height(8.dp))
@@ -1183,7 +1205,7 @@ private fun deleteConversation(ctx:Context,address:String):Int{
     return deleteSmsByIds(ctx,ids.toSet())
 }
 private fun shareSamSimApp(ctx:Context){
-    val downloadUrl="https://github.com/samuelniyonyishu35-hub/Orion-message-/releases/latest/download/app-debug.apk"
+    val downloadUrl="https://samuelniyonyishu35-hub.github.io/Orion-message-/"
     val message="Découvre SamSim, l’application de messagerie pour Android. Télécharge-la ici : $downloadUrl"
     val sendIntent=Intent(Intent.ACTION_SEND).setType("text/plain")
         .putExtra(Intent.EXTRA_SUBJECT,"Découvrir SamSim")

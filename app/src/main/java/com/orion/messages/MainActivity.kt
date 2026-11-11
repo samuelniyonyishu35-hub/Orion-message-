@@ -1005,12 +1005,14 @@ private fun Modifier.tunnelScrollEffect(state:LazyListState,itemKey:String):Modi
         val center=visible.offset+visible.size/2f
         val progress=((center-state.layoutInfo.viewportStartOffset)/height).coerceIn(0f,1f)
         val depth=1f-progress
-        scaleX=0.84f+depth*0.16f
-        scaleY=0.78f+depth*0.22f
-        alpha=0.38f+depth*0.62f
-        rotationX=progress*17f
-        translationY=progress*13f
-        cameraDistance=18f*density
+        val curve=depth*depth
+        // Stronger 3D tunnel: the first row stays almost natural, rows farther down recede visibly.
+        scaleX=0.72f+curve*0.28f
+        scaleY=0.62f+curve*0.38f
+        alpha=0.28f+curve*0.72f
+        rotationX=(1f-curve)*29f
+        translationY=(1f-curve)*22f
+        cameraDistance=28f*density
     }
 }
 

@@ -1,3 +1,4 @@
 <resources>
+    <string name="app_name">SamSim</string>
     <string name="default_web_client_id">1011965803403-9q70768r35048r8mpn3s396bglonj556.apps.googleusercontent.com</string>
 </resources>

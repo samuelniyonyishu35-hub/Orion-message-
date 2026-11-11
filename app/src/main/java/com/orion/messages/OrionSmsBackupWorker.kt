@@ -37,7 +37,6 @@ object OrionBackupScheduler {
         val manager = WorkManager.getInstance(context)
         if (!enabled) {
             manager.cancelUniqueWork("orion_auto_sms_backup")
-            manager.cancelUniquePeriodicWork("orion_auto_sms_backup")
             return
         }
         val constraints = Constraints.Builder()

@@ -96,7 +96,7 @@ class OrionSmsBackupWorker(
             val count = if (action == "restore") restoreSms(user.uid) else backupSms(user.uid)
             val now = System.currentTimeMillis()
             prefs.edit()
-                .putString("last_result", if (action == "restore") "Restauration terminée : $count nouveau(x) SMS ajouté(s)." else "Sauvegarde terminée : $count SMS vérifié(s).")
+                .putString("last_result", if (action == "restore") "Restauration terminée : $count nouveau(x) SMS ajouté(s)." else "Sauvegarde terminée : $count nouveau(x) SMS sauvegardé(s).")
                 .putLong("last_time", now)
                 .putBoolean("last_success", true)
                 .apply()
@@ -123,9 +123,16 @@ class OrionSmsBackupWorker(
 
     private fun backupSms(uid: String): Int {
         val rows = readSms()
+        val prefs = applicationContext.getSharedPreferences(OrionBackupScheduler.PREFS, Context.MODE_PRIVATE)
+        val watermarkKey = "last_backup_date_$uid"
+        val lastBackupDate = prefs.getLong(watermarkKey, 0L)
+        // Revisit the watermark timestamp so two SMS with the same millisecond are not missed.
+        // Deterministic document IDs make these occasional repeated writes idempotent.
+        val pendingRows = if (lastBackupDate == 0L) rows else rows.filter { it.date >= lastBackupDate }
+
         val db = FirebaseFirestore.getInstance()
         val backup = db.collection("users").document(uid).collection("backups").document("sms")
-        rows.chunked(400).forEach { group ->
+        pendingRows.chunked(400).forEach { group ->
             val batch = db.batch()
             group.forEach { sms ->
                 val id = smsId(sms)
@@ -141,12 +148,16 @@ class OrionSmsBackupWorker(
             }
             Tasks.await(batch.commit())
         }
+        val maxDate = maxOf(lastBackupDate, rows.maxOfOrNull { it.date } ?: lastBackupDate)
         Tasks.await(backup.set(mapOf(
             "updatedAt" to System.currentTimeMillis(),
             "messageCount" to rows.size,
+            "uploadedThisRun" to pendingRows.size,
+            "lastMessageDate" to maxDate,
             "formatVersion" to 1
         )))
-        return rows.size
+        prefs.edit().putLong(watermarkKey, maxDate).apply()
+        return pendingRows.size
     }
 
     private fun restoreSms(uid: String): Int {

@@ -714,8 +714,61 @@ class MainActivity:ComponentActivity(){
             Spacer(Modifier.height(14.dp))
             HorizontalDivider(color=muted.copy(alpha=.2f))
             Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.Backup,null,tint=muted);Spacer(Modifier.width(8.dp));Text("Sauvegarder et restaurer les SMS",color=muted,fontSize=13.sp)}
-            Text("Sauvegarde cloud non activée. Tes SMS restent sur le téléphone tant que tu n’autorises pas explicitement une sauvegarde.",color=muted,fontSize=11.sp,modifier=Modifier.padding(start=32.dp,top=3.dp))
+            val backupPrefs=remember { ctx.getSharedPreferences(OrionBackupScheduler.PREFS,Context.MODE_PRIVATE) }
+            var backupMode by remember { mutableStateOf(backupPrefs.getString(OrionBackupScheduler.KEY_NETWORK,OrionBackupScheduler.MODE_WIFI) ?: OrionBackupScheduler.MODE_WIFI) }
+            var autoBackup by remember { mutableStateOf(backupPrefs.getBoolean(OrionBackupScheduler.KEY_AUTO,false)) }
+            var backupStatus by remember { mutableStateOf(backupPrefs.getString("last_result", "Aucune sauvegarde effectuée.") ?: "Aucune sauvegarde effectuée.") }
+            LaunchedEffect(googleEmail,autoBackup) {
+                OrionBackupScheduler.scheduleAutomatic(ctx, autoBackup && googleEmail != null)
+            }
+            Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.Backup,null,tint=iBlue);Spacer(Modifier.width(8.dp));Text("Sauvegarder et restaurer les SMS",color=ink,fontSize=14.sp,fontWeight=FontWeight.SemiBold)}
+            Text("Les sauvegardes sont privées et liées au compte Google connecté. ORION ne transmet aucun SMS sans cette fonction activée.",color=muted,fontSize=11.sp,modifier=Modifier.padding(top=5.dp))
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment=Alignment.CenterVertically){
+                Column(Modifier.weight(1f)){
+                    Text("Sauvegarde automatique en Wi-Fi",color=ink,fontWeight=FontWeight.Medium)
+                    Text("ORION vérifie régulièrement le Wi-Fi et sauvegarde les nouveaux SMS.",color=muted,fontSize=11.sp)
+                }
+                Switch(checked=autoBackup,onCheckedChange={enabled->
+                    autoBackup=enabled
+                    backupPrefs.edit().putBoolean(OrionBackupScheduler.KEY_AUTO,enabled).apply()
+                    OrionBackupScheduler.scheduleAutomatic(ctx,enabled && googleEmail!=null)
+                },enabled=googleEmail!=null)
+            }
+            if(googleEmail==null)Text("Connecte d’abord ton compte Google pour activer la sauvegarde.",color=muted,fontSize=11.sp)
+            Spacer(Modifier.height(12.dp))
+            Text("Réseau autorisé pour la sauvegarde manuelle",color=ink,fontWeight=FontWeight.Medium,fontSize=13.sp)
+            listOf(
+                OrionBackupScheduler.MODE_WIFI to "Wi-Fi uniquement",
+                OrionBackupScheduler.MODE_MOBILE to "Données mobiles uniquement",
+                OrionBackupScheduler.MODE_BOTH to "Wi-Fi et données mobiles"
+            ).forEach{(value,label)->
+                Row(Modifier.fillMaxWidth().clickable{
+                    backupMode=value
+                    backupPrefs.edit().putString(OrionBackupScheduler.KEY_NETWORK,value).apply()
+                }.padding(vertical=4.dp),verticalAlignment=Alignment.CenterVertically){
+                    Text(label,color=ink,modifier=Modifier.weight(1f),fontSize=13.sp)
+                    RadioButton(selected=backupMode==value,onClick={
+                        backupMode=value
+                        backupPrefs.edit().putString(OrionBackupScheduler.KEY_NETWORK,value).apply()
+                    })
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Button(onClick={
+                OrionBackupScheduler.backupNow(ctx,backupMode)
+                backupStatus="Sauvegarde en attente du réseau autorisé…"
+            },enabled=googleEmail!=null,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){
+                Icon(Icons.Default.CloudUpload,null);Spacer(Modifier.width(8.dp));Text("Sauvegarder maintenant")
+            }
+            OutlinedButton(onClick={
+                OrionBackupScheduler.restore(ctx)
+                backupStatus="Restauration en attente du réseau…"
+            },enabled=googleEmail!=null,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){
+                Icon(Icons.Default.CloudDownload,null);Spacer(Modifier.width(8.dp));Text("Restaurer les SMS")
+            }
+            Text(backupStatus,color=muted,fontSize=11.sp,modifier=Modifier.padding(top=8.dp))
+            Text("La restauration ajoute uniquement les SMS absents du téléphone. Elle ne supprime aucun message local. ORION doit être l’application SMS par défaut pour restaurer.",color=muted,fontSize=10.sp,modifier=Modifier.padding(top=5.dp))
         }
         Spacer(Modifier.height(22.dp));SectionTitle("POLICE D’ÉCRITURE",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){

@@ -71,6 +71,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
@@ -434,7 +435,23 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
             }
         }else LazyColumn(state=listState,contentPadding=PaddingValues(bottom=100.dp)){
             items(matchingThreads,key={it.address}){item->
-                Row(Modifier.fillMaxWidth().animateContentSize(animationSpec=spring(dampingRatio=0.82f,stiffness=420f)).combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}).background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
+                Row(Modifier.fillMaxWidth().graphicsLayer {
+                    val visible = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == item.address }
+                    if (visible != null) {
+                        val viewportHeight = (listState.layoutInfo.viewportEndOffset - listState.layoutInfo.viewportStartOffset).toFloat().coerceAtLeast(1f)
+                        val viewportCenter = (listState.layoutInfo.viewportStartOffset + listState.layoutInfo.viewportEndOffset) / 2f
+                        val itemCenter = visible.offset + visible.size / 2f
+                        val signedDistance = ((itemCenter - viewportCenter) / (viewportHeight / 2f)).coerceIn(-1f, 1f)
+                        val distance = kotlin.math.abs(signedDistance)
+                        val depth = 1f - distance
+                        scaleX = 0.84f + depth * 0.16f
+                        scaleY = 0.78f + depth * 0.22f
+                        alpha = 0.38f + depth * 0.62f
+                        rotationX = -signedDistance * 17f
+                        translationY = signedDistance * 13f
+                        cameraDistance = 18f * density
+                    }
+                }.animateContentSize(animationSpec=spring(dampingRatio=0.82f,stiffness=420f)).combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}).background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
                     if(selectedThreads.contains(item.address))Icon(Icons.Default.CheckCircle,null,tint=iBlue,modifier=Modifier.size(50.dp).padding(12.dp)) else ContactAvatar(ctx,item.address,item.displayName,50)
                     Spacer(Modifier.width(13.dp))
                     Column(Modifier.weight(1f)){

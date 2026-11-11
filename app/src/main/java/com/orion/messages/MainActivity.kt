@@ -293,7 +293,7 @@ class MainActivity:ComponentActivity(){
                 page=="profile" -> TopAppBar(title={Text("Informations",fontSize=20.sp,fontWeight=FontWeight.SemiBold,color=ink)},navigationIcon={IconButton(onClick={page="chat"}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
                 thread!=null -> TopAppBar(
                     title={Row(Modifier.fillMaxWidth().clickable{page="profile"}.padding(vertical=2.dp),verticalAlignment=Alignment.CenterVertically){
-                        Avatar(thread!!.displayName,42)
+                        ContactAvatar(ctx,thread!!.address,thread!!.displayName,42)
                         Spacer(Modifier.width(10.dp))
                         Column { Text(thread!!.displayName,fontSize=17.sp,fontWeight=FontWeight.SemiBold,color=ink,maxLines=1,overflow=TextOverflow.Ellipsis);Text("touchez pour afficher le profil",fontSize=11.sp,color=muted) }
                     }},
@@ -367,6 +367,19 @@ class MainActivity:ComponentActivity(){
         Text(initials,color=Color.White,fontSize=(size/2.5f).sp,fontWeight=FontWeight.SemiBold)
     }
 }
+@Composable private fun ContactAvatar(ctx:Context,address:String,name:String,size:Int){
+    val bitmap=remember(address){loadContactPhoto(ctx,address)?.asImageBitmap()}
+    if(bitmap!=null) Image(bitmap=bitmap,contentDescription="Photo de $name",modifier=Modifier.size(size.dp).clip(CircleShape),contentScale=ContentScale.Crop)
+    else Avatar(name,size)
+}
+private fun contactPhotoFile(ctx:Context,address:String):File{
+    val key=java.security.MessageDigest.getInstance("SHA-256").digest(address.trim().toByteArray()).joinToString(""){"%02x".format(it)}
+    return File(File(ctx.filesDir,"contact_photos").apply{mkdirs()},"$key.jpg")
+}
+private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap?{
+    val file=contactPhotoFile(ctx,address)
+    return if(file.exists()) BitmapFactory.decodeFile(file.absolutePath) else null
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable private fun HomeScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,threads:List<ThreadItem>,contacts:List<ContactItem>,query:String,onQuery:(String)->Unit,listState:LazyListState,onOpen:(ThreadItem)->Unit,onContact:(ContactItem)->Unit){
@@ -421,7 +434,7 @@ class MainActivity:ComponentActivity(){
         }else LazyColumn(state=listState,contentPadding=PaddingValues(bottom=100.dp)){
             items(matchingThreads){item->
                 Row(Modifier.fillMaxWidth().combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}).background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
-                    if(selectedThreads.contains(item.address))Icon(Icons.Default.CheckCircle,null,tint=iBlue,modifier=Modifier.size(50.dp).padding(12.dp)) else Avatar(item.displayName,50)
+                    if(selectedThreads.contains(item.address))Icon(Icons.Default.CheckCircle,null,tint=iBlue,modifier=Modifier.size(50.dp).padding(12.dp)) else ContactAvatar(ctx,item.address,item.displayName,50)
                     Spacer(Modifier.width(13.dp))
                     Column(Modifier.weight(1f)){
                         Text(item.displayName,color=ink,fontSize=16.sp,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)
@@ -589,12 +602,28 @@ class MainActivity:ComponentActivity(){
     val number=item.address
     var blocked by remember(number){mutableStateOf(runCatching{BlockedNumberContract.canCurrentUserBlockNumbers(ctx) && BlockedNumberContract.isBlocked(ctx,number)}.getOrDefault(false))}
     val contact=contacts.firstOrNull{normalizePhone(it.number)==normalizePhone(number)}
+    var photoVersion by remember(number){mutableIntStateOf(0)}
+    val photoPicker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->
+        if(uri!=null){
+            val saved=runCatching{
+                val file=contactPhotoFile(ctx,number)
+                ctx.contentResolver.openInputStream(uri)?.use{input->file.outputStream().use{output->input.copyTo(output)}} ?: throw IllegalStateException("Photo inaccessible")
+                file.exists() && file.length()>0
+            }.getOrDefault(false)
+            if(saved){photoVersion++;onBlockResult("Photo de profil enregistrée dans ORION.")}
+            else onBlockResult("Impossible d’enregistrer cette photo.")
+        }
+    }
+    val profilePhoto=remember(number,photoVersion){loadContactPhoto(ctx,number)?.asImageBitmap()}
     Column(mod.fillMaxSize().padding(horizontal=18.dp),horizontalAlignment=Alignment.CenterHorizontally){
         Spacer(Modifier.height(24.dp))
         Box(Modifier.size(108.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Color(0xFF9CC5FF),Color(0xFF3269D6)))),contentAlignment=Alignment.Center){
-            Text(item.displayName.take(1).uppercase(),color=Color.White,fontSize=43.sp,fontWeight=FontWeight.Medium)
+            if(profilePhoto!=null) Image(bitmap=profilePhoto,contentDescription="Photo de ${item.displayName}",modifier=Modifier.fillMaxSize(),contentScale=ContentScale.Crop)
+            else Text(item.displayName.take(1).uppercase(),color=Color.White,fontSize=43.sp,fontWeight=FontWeight.Medium)
         }
         Spacer(Modifier.height(12.dp));Text(item.displayName,fontSize=24.sp,fontWeight=FontWeight.Bold,color=ink)
+        Spacer(Modifier.height(12.dp))
+        ProfileAction("Modifier la photo",Icons.Default.PhotoCamera,Modifier.fillMaxWidth(.62f),surface,ink){photoPicker.launch("image/*")}
         Text(number,color=muted,fontSize=14.sp)
         Spacer(Modifier.height(22.dp))
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)){
@@ -957,5 +986,8 @@ private fun shareTextWithChooser(ctx:Context,text:String){
     runCatching{ctx.startActivity(chooser)}.onFailure{Toast.makeText(ctx,"Aucune application de partage disponible.",Toast.LENGTH_LONG).show()}
 }
 
-private fun senderLabel(address:String):String=if(address.trim().equals("PCB",ignoreCase=true)||address.trim().equals("BCB",ignoreCase=true)) "Connect" else address
-private fun normalizePhone(value:String):String=value.filter{it.isDigit()}
+private fun senderLabel(address:String):String=address.trim()
+private fun normalizePhone(value:String):String{
+    val digits=value.filter{it.isDigit()}
+    return if(digits.isNotEmpty())digits else value.trim().uppercase(java.util.Locale.ROOT)
+}

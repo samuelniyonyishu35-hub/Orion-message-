@@ -417,9 +417,9 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
         it.name.contains(query,true) || it.number.contains(query,true) ||
         (normalizedQuery.length>=2 && it.number.filter{ch->ch.isDigit()}.contains(normalizedQuery))
     }.take(8)
-    Column(mod.padding(horizontal=16.dp)){
+    Column(mod){
         if(selectedThreads.isNotEmpty()){
-            Row(Modifier.fillMaxWidth().padding(vertical=5.dp),verticalAlignment=Alignment.CenterVertically){
+            Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=5.dp),verticalAlignment=Alignment.CenterVertically){
                 IconButton(onClick={selectedThreads=emptySet()}){Icon(Icons.Default.Close,null,tint=ink)}
                 Text("${selectedThreads.size} sélectionnée(s)",color=ink,modifier=Modifier.weight(1f))
                 IconButton(onClick={val t=threads.filter{selectedThreads.contains(it.address)}.joinToString("\n"){ "${it.displayName}: ${it.body}" };if(copyTextToClipboard(ctx,t))Toast.makeText(ctx,"Texte copié",Toast.LENGTH_SHORT).show() else Toast.makeText(ctx,"Copie impossible",Toast.LENGTH_SHORT).show()}){Icon(Icons.Default.ContentCopy,"Copier",tint=iBlue)}
@@ -428,7 +428,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
             }
         }
         Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if(surface==Color.White)Color(0xFFE5E5EA) else surface).padding(horizontal=12.dp,vertical=2.dp),verticalAlignment=Alignment.CenterVertically){
+        Row(Modifier.fillMaxWidth().padding(horizontal=16.dp).clip(RoundedCornerShape(14.dp)).background(if(surface==Color.White)Color(0xFFE5E5EA) else surface).padding(horizontal=12.dp,vertical=2.dp),verticalAlignment=Alignment.CenterVertically){
             Icon(Icons.Default.Search,null,tint=muted)
             Spacer(Modifier.width(8.dp))
             BasicTextField(value=query,onValueChange=onQuery,modifier=Modifier.weight(1f).padding(vertical=12.dp),singleLine=true,textStyle=TextStyle(color=ink,fontSize=16.sp),decorationBox={inner->if(query.isEmpty())Text("Rechercher",color=muted,fontSize=16.sp);inner()})
@@ -437,37 +437,37 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
         if(query.isNotBlank()){
             Spacer(Modifier.height(14.dp))
             if(matchingContacts.isNotEmpty()){
-                Text("CONTACTS",fontSize=11.sp,fontWeight=FontWeight.Bold,color=muted,letterSpacing=1.3.sp)
-                matchingContacts.forEach{c->Row(Modifier.fillMaxWidth().clickable{onContact(c)}.padding(vertical=9.dp),verticalAlignment=Alignment.CenterVertically){
+                Text("CONTACTS",fontSize=11.sp,fontWeight=FontWeight.Bold,color=muted,letterSpacing=1.3.sp,modifier=Modifier.padding(horizontal=16.dp))
+                matchingContacts.forEach{c->Row(Modifier.fillMaxWidth().padding(horizontal=16.dp).clickable{onContact(c)}.padding(vertical=9.dp),verticalAlignment=Alignment.CenterVertically){
                     Avatar(c.name,42);Spacer(Modifier.width(12.dp));Column(Modifier.weight(1f)){Text(c.name,color=ink,fontWeight=FontWeight.SemiBold);Text(c.number,color=muted,fontSize=13.sp)}
                     Icon(Icons.Default.Message,null,tint=iBlue)
                 }}
-                HorizontalDivider(color=muted.copy(alpha=.25f))
+                HorizontalDivider(color=muted.copy(alpha=.25f),modifier=Modifier.padding(horizontal=16.dp))
             }
-            Text("DISCUSSIONS",fontSize=11.sp,fontWeight=FontWeight.Bold,color=muted,letterSpacing=1.3.sp,modifier=Modifier.padding(top=12.dp,bottom=4.dp))
+            Text("DISCUSSIONS",fontSize=11.sp,fontWeight=FontWeight.Bold,color=muted,letterSpacing=1.3.sp,modifier=Modifier.padding(start=16.dp,end=16.dp,top=12.dp,bottom=4.dp))
         }else{
             Spacer(Modifier.height(18.dp))
-            Text("DISCUSSIONS",fontSize=11.sp,fontWeight=FontWeight.Bold,color=muted,letterSpacing=1.3.sp)
+            Text("DISCUSSIONS",fontSize=11.sp,fontWeight=FontWeight.Bold,color=muted,letterSpacing=1.3.sp,modifier=Modifier.padding(horizontal=16.dp))
         }
         if(matchingThreads.isEmpty() && matchingContacts.isEmpty()){
-            Column(Modifier.fillMaxWidth().padding(top=55.dp),horizontalAlignment=Alignment.CenterHorizontally){
+            Column(Modifier.fillMaxWidth().padding(horizontal=16.dp).padding(top=55.dp),horizontalAlignment=Alignment.CenterHorizontally){
                 Box(Modifier.size(72.dp).clip(CircleShape).background(iBlue.copy(alpha=.12f)),contentAlignment=Alignment.Center){Icon(Icons.Default.ChatBubble,null,tint=iBlue,modifier=Modifier.size(32.dp))}
                 Spacer(Modifier.height(14.dp));Text(if(query.isBlank())"Aucun message" else "Aucun résultat",fontWeight=FontWeight.SemiBold,color=ink,fontSize=18.sp)
                 Text(if(query.isBlank())"Touchez le bouton pour commencer." else "Essaie un autre nom ou numéro.",color=muted,fontSize=13.sp)
             }
         }else LazyColumn(state=listState,contentPadding=PaddingValues(bottom=100.dp)){
             items(matchingThreads,key={it.address}){item->
-                Row(Modifier.fillMaxWidth().tunnelScrollEffect(listState,item.address).animateContentSize(animationSpec=spring(dampingRatio=0.82f,stiffness=420f)).combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}).background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
+                Box(Modifier.fillMaxWidth().tunnelScrollEffect(listState,item.address).animateContentSize(animationSpec=spring(dampingRatio=0.82f,stiffness=420f)).combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}) .background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent)){\n                Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
                     if(selectedThreads.contains(item.address))Icon(Icons.Default.CheckCircle,null,tint=iBlue,modifier=Modifier.size(50.dp).padding(12.dp)) else ContactAvatar(ctx,item.address,item.displayName,50)
                     Spacer(Modifier.width(13.dp))
                     Column(Modifier.weight(1f)){
                         Text(item.displayName,color=ink,fontSize=16.sp,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)
                         Spacer(Modifier.height(3.dp));Text(item.body.ifBlank{"Message de ${item.displayName}"},color=muted,fontSize=14.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                     }
-                    if(item.unreadCount>0)Box(Modifier.padding(end=8.dp).size(20.dp).clip(CircleShape).background(iBlue),contentAlignment=Alignment.Center){Text(if(item.unreadCount>99)"99+" else item.unreadCount.toString(),color=Color.White,fontSize=if(item.unreadCount>9)8.sp else 10.sp,fontWeight=FontWeight.Bold,maxLines=1,letterSpacing=(-0.4).sp)}
+                    if(item.unreadCount>0)Box(Modifier.padding(end=8.dp).size(18.dp).clip(CircleShape).background(iBlue),contentAlignment=Alignment.Center){Text(if(item.unreadCount>99)"99+" else item.unreadCount.toString(),color=Color.White,fontSize=if(item.unreadCount>9)7.sp else 9.sp,fontWeight=FontWeight.Bold,maxLines=1,letterSpacing=(-0.4).sp)}
                     Icon(Icons.Default.ChevronRight,null,tint=muted)
                 }
-                HorizontalDivider(color=muted.copy(alpha=.2f),modifier=Modifier.padding(start=63.dp))
+                }\n                HorizontalDivider(color=muted.copy(alpha=.2f))
             }
         }
     }

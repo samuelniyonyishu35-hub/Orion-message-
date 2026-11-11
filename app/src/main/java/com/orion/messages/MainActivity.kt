@@ -135,7 +135,7 @@ class MainActivity:ComponentActivity(){
     private val role=registerForActivityResult(ActivityResultContracts.StartActivityForResult()){
         tick++
         val ok=if(Build.VERSION.SDK_INT>=29)getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_SMS)==true else Telephony.Sms.getDefaultSmsPackage(this)==packageName
-        Toast.makeText(this,if(ok)"ORION est l'application SMS par défaut" else "Choix non confirmé",Toast.LENGTH_LONG).show()
+        Toast.makeText(this,if(ok)"SamSim est l'application SMS par défaut" else "Choix non confirmé",Toast.LENGTH_LONG).show()
     }
     override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState)
         showSystemBars()
@@ -222,7 +222,7 @@ class MainActivity:ComponentActivity(){
                 put(Telephony.Sms.TYPE,Telephony.Sms.MESSAGE_TYPE_OUTBOX);put(Telephony.Sms.STATUS,Telephony.Sms.STATUS_PENDING)
                 if(sim!=null&&Build.VERSION.SDK_INT>=22)put(Telephony.Sms.SUBSCRIPTION_ID,sim)
             }
-            val savedUri=contentResolver.insert(Telephony.Sms.Sent.CONTENT_URI,values) ?: throw IllegalStateException("ORION doit être l’application SMS par défaut pour enregistrer les messages.")
+            val savedUri=contentResolver.insert(Telephony.Sms.Sent.CONTENT_URI,values) ?: throw IllegalStateException("SamSim doit être l’application SMS par défaut pour enregistrer les messages.")
             val request=(System.currentTimeMillis()%Int.MAX_VALUE).toInt()
             val sentIntent=Intent(this,SmsStatusReceiver::class.java).setAction(SmsStatusReceiver.ACTION_SENT).putExtra(SmsStatusReceiver.EXTRA_URI,savedUri.toString())
             val deliveredIntent=Intent(this,SmsStatusReceiver::class.java).setAction(SmsStatusReceiver.ACTION_DELIVERED).putExtra(SmsStatusReceiver.EXTRA_URI,savedUri.toString())
@@ -253,7 +253,7 @@ class MainActivity:ComponentActivity(){
     var photoUri by remember{mutableStateOf<Uri?>(null)}
     val photoPicker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->photoUri=uri}
     val cameraPicker=rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()){bitmap->
-        if(bitmap!=null){val saved=runCatching{MediaStore.Images.Media.insertImage(ctx.contentResolver,bitmap,"ORION photo","Photo prise avec ORION")}.getOrNull();photoUri=saved?.let{Uri.parse(it)}}
+        if(bitmap!=null){val saved=runCatching{MediaStore.Images.Media.insertImage(ctx.contentResolver,bitmap,"SamSim photo","Photo prise avec SamSim")}.getOrNull();photoUri=saved?.let{Uri.parse(it)}}
     }
 
     val photoPreview=remember(photoUri){photoUri?.let{uri->runCatching{ctx.contentResolver.openInputStream(uri)?.use{stream->BitmapFactory.decodeStream(stream)?.asImageBitmap()}}.getOrNull()}}
@@ -314,7 +314,7 @@ class MainActivity:ComponentActivity(){
                     navigationIcon={IconButton(onClick={thread=null;page="home";status=""}){Icon(Icons.Default.ArrowBack,null,tint=iBlue)}},
                     actions={IconButton(onClick={call(thread!!.address.ifBlank{number})}){Icon(Icons.Default.Call,"Appeler",tint=iBlue)}},
                     colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
-                else -> TopAppBar(title={Column{Text("Messages",fontSize=30.sp,fontWeight=FontWeight.Bold,color=ink,letterSpacing=(-.8).sp);Text("ORION",fontSize=10.sp,color=muted,letterSpacing=2.sp)}},
+                else -> TopAppBar(title={Column{Text("Messages",fontSize=30.sp,fontWeight=FontWeight.Bold,color=ink,letterSpacing=(-.8).sp);Text("SamSim",fontSize=10.sp,color=muted,letterSpacing=2.sp)}},
                     navigationIcon={IconButton(onClick={page="settings"}){Icon(Icons.Default.MoreVert,"Ouvrir les réglages",tint=iBlue)}},
                     colors=TopAppBarDefaults.topAppBarColors(containerColor=bg))
             } }
@@ -367,7 +367,7 @@ class MainActivity:ComponentActivity(){
                                     putExtra(Intent.EXTRA_TEXT,draft)
                                     putExtra("address",dest)
                                     putExtra("sms_body",draft)
-                                    clipData=ClipData.newUri(ctx.contentResolver,"Photo ORION",uri)
+                                    clipData=ClipData.newUri(ctx.contentResolver,"Photo SamSim",uri)
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
                                 ctx.startActivity(Intent.createChooser(share,"Envoyer la photo par MMS"))
@@ -428,7 +428,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
                 Text("${selectedThreads.size} sélectionnée(s)",color=ink,modifier=Modifier.weight(1f))
                 IconButton(onClick={val t=threads.filter{selectedThreads.contains(it.address)}.joinToString("\n"){ "${it.displayName}: ${it.body}" };if(copyTextToClipboard(ctx,t))Toast.makeText(ctx,"Texte copié",Toast.LENGTH_SHORT).show() else Toast.makeText(ctx,"Copie impossible",Toast.LENGTH_SHORT).show()}){Icon(Icons.Default.ContentCopy,"Copier",tint=iBlue)}
                 IconButton(onClick={val t=threads.filter{selectedThreads.contains(it.address)}.joinToString("\n"){ "${it.displayName}: ${it.body}" };shareTextWithChooser(ctx,t)}){Icon(Icons.Default.Share,"Partager",tint=iBlue)}
-                IconButton(onClick={val count=selectedThreads.sumOf{deleteConversation(ctx,it)};selectedThreads=emptySet();Toast.makeText(ctx,if(count>0)"$count message(s) supprimé(s)" else "Suppression impossible : définis ORION comme application SMS par défaut",Toast.LENGTH_LONG).show()}){Icon(Icons.Default.Delete,"Supprimer",tint=Color(0xFFFF453A))}
+                IconButton(onClick={val count=selectedThreads.sumOf{deleteConversation(ctx,it)};selectedThreads=emptySet();Toast.makeText(ctx,if(count>0)"$count message(s) supprimé(s)" else "Suppression impossible : définis SamSim comme application SMS par défaut",Toast.LENGTH_LONG).show()}){Icon(Icons.Default.Delete,"Supprimer",tint=Color(0xFFFF453A))}
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -556,7 +556,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
         recorder?.release();recorder=null;recording=false;recordingFile=null
         if(file==null||!file.exists()||file.length()==0L){Toast.makeText(context,"Enregistrement audio vide.",Toast.LENGTH_SHORT).show();return}
         try{
-            val values=ContentValues().apply{put(MediaStore.Audio.Media.DISPLAY_NAME,file.name);put(MediaStore.Audio.Media.MIME_TYPE,"audio/mp4");put(MediaStore.Audio.Media.RELATIVE_PATH,"Music/ORION")}
+            val values=ContentValues().apply{put(MediaStore.Audio.Media.DISPLAY_NAME,file.name);put(MediaStore.Audio.Media.MIME_TYPE,"audio/mp4");put(MediaStore.Audio.Media.RELATIVE_PATH,"Music/SamSim")}
             val uri=context.contentResolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,values) ?: throw IllegalStateException("Stockage audio indisponible")
             context.contentResolver.openOutputStream(uri)?.use{out->file.inputStream().use{input->input.copyTo(out)}} ?: throw IllegalStateException("Impossible d’écrire le fichier audio")
             val share=Intent(Intent.ACTION_SEND).apply{type="audio/mp4";putExtra(Intent.EXTRA_STREAM,uri);addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)}
@@ -572,7 +572,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
                 Text("${selectedMessages.size} sélectionné(s)",color=ink,modifier=Modifier.weight(1f))
                 IconButton(onClick={val t=messages.filter{selectedMessages.contains(it.id)}.joinToString("\n"){it.body};if(copyTextToClipboard(context,t))Toast.makeText(context,"Message(s) copié(s)",Toast.LENGTH_SHORT).show() else Toast.makeText(context,"Copie impossible",Toast.LENGTH_SHORT).show()}){Icon(Icons.Default.ContentCopy,"Copier",tint=iBlue)}
                 IconButton(onClick={val t=messages.filter{selectedMessages.contains(it.id)}.joinToString("\n"){it.body};shareTextWithChooser(context,t)}){Icon(Icons.Default.Share,"Partager",tint=iBlue)}
-                IconButton(onClick={val count=deleteSmsByIds(context,selectedMessages);selectedMessages=emptySet();Toast.makeText(context,if(count>0)"$count message(s) supprimé(s)" else "Suppression impossible : définis ORION comme application SMS par défaut",Toast.LENGTH_LONG).show()}){Icon(Icons.Default.Delete,"Supprimer",tint=Color(0xFFFF453A))}
+                IconButton(onClick={val count=deleteSmsByIds(context,selectedMessages);selectedMessages=emptySet();Toast.makeText(context,if(count>0)"$count message(s) supprimé(s)" else "Suppression impossible : définis SamSim comme application SMS par défaut",Toast.LENGTH_LONG).show()}){Icon(Icons.Default.Delete,"Supprimer",tint=Color(0xFFFF453A))}
             }
         }
         if(item.address.isBlank()){
@@ -664,7 +664,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
                 ctx.contentResolver.openInputStream(uri)?.use{input->file.outputStream().use{output->input.copyTo(output)}} ?: throw IllegalStateException("Photo inaccessible")
                 file.exists() && file.length()>0
             }.getOrDefault(false)
-            if(saved){photoVersion++;onBlockResult("Photo de profil enregistrée dans ORION.")}
+            if(saved){photoVersion++;onBlockResult("Photo de profil enregistrée dans SamSim.")}
             else onBlockResult("Impossible d’enregistrer cette photo.")
         }
     }
@@ -686,7 +686,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
                 TextButton(onClick={
                     val removed=runCatching{contactPhotoFile(ctx,number).delete()}.getOrDefault(false)
                     photoVersion++
-                    onBlockResult(if(removed)"Photo supprimée. L’avatar ORION par défaut est rétabli." else "Impossible de supprimer la photo.")
+                    onBlockResult(if(removed)"Photo supprimée. L’avatar SamSim par défaut est rétabli." else "Impossible de supprimer la photo.")
                 }){
                     Icon(Icons.Default.Delete,null,tint=Color(0xFFFF453A))
                     Spacer(Modifier.width(6.dp))
@@ -718,7 +718,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
             Spacer(Modifier.height(14.dp))
             Text("Téléphone",fontSize=12.sp,color=muted);Text(formatInternationalPhone(number),fontSize=16.sp,color=ink,modifier=Modifier.padding(top=4.dp))
             if(contact!=null){Spacer(Modifier.height(14.dp));Text("Nom dans les contacts",fontSize=12.sp,color=muted);Text(contact.name,fontSize=16.sp,color=ink,modifier=Modifier.padding(top=4.dp))}
-            if(customName.isNotBlank()){Spacer(Modifier.height(14.dp));Text("Nom du profil ORION",fontSize=12.sp,color=muted);Text(customName,fontSize=16.sp,color=ink,modifier=Modifier.padding(top=4.dp))}
+            if(customName.isNotBlank()){Spacer(Modifier.height(14.dp));Text("Nom du profil SamSim",fontSize=12.sp,color=muted);Text(customName,fontSize=16.sp,color=ink,modifier=Modifier.padding(top=4.dp))}
         }
         Spacer(Modifier.height(8.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(surface).padding(8.dp)){
@@ -728,9 +728,9 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
                 customName=""
                 photoVersion++
                 editName=item.displayName
-                onBlockResult("Profil ORION supprimé. Les contacts et les SMS sont conservés.")
+                onBlockResult("Profil SamSim supprimé. Les contacts et les SMS sont conservés.")
             }.padding(12.dp),verticalAlignment=Alignment.CenterVertically){
-                Icon(Icons.Default.Delete,null,tint=Color(0xFFFF453A));Spacer(Modifier.width(12.dp));Text("Supprimer le profil ORION",color=Color(0xFFFF453A),fontSize=14.sp)
+                Icon(Icons.Default.Delete,null,tint=Color(0xFFFF453A));Spacer(Modifier.width(12.dp));Text("Supprimer le profil SamSim",color=Color(0xFFFF453A),fontSize=14.sp)
             }
             HorizontalDivider(color=muted.copy(alpha=.2f))
             Row(Modifier.fillMaxWidth().clickable{
@@ -759,7 +759,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
                 if(actual==blocked) throw IllegalStateException("Android n'a pas confirmé le changement.")
                 blocked=actual
                 onBlockResult(if(actual)"Numéro bloqué par Android." else "Numéro débloqué.")
-            }.onFailure{error->onBlockResult("Échec du blocage : ${error.localizedMessage ?: "Android a refusé l'opération"}. Vérifie qu'ORION est l'application SMS par défaut.")}
+            }.onFailure{error->onBlockResult("Échec du blocage : ${error.localizedMessage ?: "Android a refusé l'opération"}. Vérifie qu'SamSim est l'application SMS par défaut.")}
         }.padding(16.dp),verticalAlignment=Alignment.CenterVertically){
             Icon(if(blocked)Icons.Default.CheckCircle else Icons.Default.Block,null,tint=if(blocked)Color(0xFF34C759) else Color(0xFFFF453A))
             Spacer(Modifier.width(12.dp));Text(if(blocked)"Débloquer ce correspondant" else "Bloquer ce correspondant",color=if(blocked)Color(0xFFFF453A) else ink,fontSize=15.sp)
@@ -776,17 +776,17 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
     }
     if(editingProfile) AlertDialog(
         onDismissRequest={editingProfile=false},
-        title={Text("Modifier le profil ORION")},
+        title={Text("Modifier le profil SamSim")},
         text={Column{
             OutlinedTextField(value=editName,onValueChange={editName=it},singleLine=true,label={Text("Nom du profil")},modifier=Modifier.fillMaxWidth())
-            Text("Ce nom sera enregistré uniquement dans ORION. Le répertoire Android ne sera pas modifié.",fontSize=12.sp,color=muted,modifier=Modifier.padding(top=8.dp))
+            Text("Ce nom sera enregistré uniquement dans SamSim. Le répertoire Android ne sera pas modifié.",fontSize=12.sp,color=muted,modifier=Modifier.padding(top=8.dp))
         }},
         confirmButton={TextButton(onClick={
             val clean=editName.trim()
             profilePrefs.edit().putString("name_$profileKey",clean).apply()
             customName=clean
             editingProfile=false
-            onBlockResult("Profil ORION mis à jour.")
+            onBlockResult("Profil SamSim mis à jour.")
         }){Text("Enregistrer")}},
         dismissButton={TextButton(onClick={editingProfile=false}){Text("Annuler")}}
     )
@@ -829,8 +829,12 @@ private fun formatInternationalPhone(raw:String):String{
         Spacer(Modifier.height(16.dp));SectionTitle("APPLICATION",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
             Row(verticalAlignment=Alignment.CenterVertically){Box(Modifier.size(44.dp).clip(RoundedCornerShape(13.dp)).background(iBlue),contentAlignment=Alignment.Center){Icon(Icons.Default.Sms,null,tint=Color.White)}
-                Spacer(Modifier.width(12.dp));Column{Text("ORION Messages",color=ink,fontWeight=FontWeight.SemiBold);Text("Messagerie SMS",color=muted,fontSize=12.sp)}}
+                Spacer(Modifier.width(12.dp));Column{Text("SamSim Messages",color=ink,fontWeight=FontWeight.SemiBold);Text("Messagerie SMS",color=muted,fontSize=12.sp)}}
             Spacer(Modifier.height(16.dp));Button(onClick=onDefault,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){Text("Définir comme application SMS par défaut")}
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(onClick={shareSamSimApp(ctx)},modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(13.dp)){
+                Icon(Icons.Default.Share,null);Spacer(Modifier.width(8.dp));Text("Partager l’application")
+            }
         }
         Spacer(Modifier.height(22.dp));SectionTitle("CARTES SIM",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
@@ -844,7 +848,7 @@ private fun formatInternationalPhone(raw:String):String{
         Spacer(Modifier.height(22.dp));SectionTitle("APPARENCE",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
             Text("Thème de l’application",color=ink,fontWeight=FontWeight.SemiBold)
-            Text("Choisis si ORION suit Android ou utilise un thème fixe.",color=muted,fontSize=12.sp,modifier=Modifier.padding(top=4.dp,bottom=12.dp))
+            Text("Choisis si SamSim suit Android ou utilise un thème fixe.",color=muted,fontSize=12.sp,modifier=Modifier.padding(top=4.dp,bottom=12.dp))
             listOf("system" to "Suivre le système","light" to "Mode clair","dark" to "Mode sombre").forEach{(value,label)->
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp)).clickable{onThemeMode(value)}.padding(vertical=10.dp,horizontal=4.dp),verticalAlignment=Alignment.CenterVertically){Text(label,color=ink,modifier=Modifier.weight(1f));RadioButton(selected=themeMode==value,onClick={onThemeMode(value)},colors=RadioButtonDefaults.colors(selectedColor=iBlue))}
             }
@@ -852,7 +856,7 @@ private fun formatInternationalPhone(raw:String):String{
         Spacer(Modifier.height(22.dp));SectionTitle("PROPRIÉTAIRE DE L’APPLICATION",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
             Text("Informations du propriétaire",color=ink,fontWeight=FontWeight.SemiBold)
-            Text("Ces informations servent à identifier le propriétaire d’ORION sur cet appareil.",color=muted,fontSize=12.sp,modifier=Modifier.padding(top=4.dp,bottom=12.dp))
+            Text("Ces informations servent à identifier le propriétaire d’SamSim sur cet appareil.",color=muted,fontSize=12.sp,modifier=Modifier.padding(top=4.dp,bottom=12.dp))
             OutlinedTextField(value=ownerName,onValueChange=onOwnerName,modifier=Modifier.fillMaxWidth(),singleLine=true,label={Text("Nom du propriétaire")},placeholder={Text("Nom et prénom")},shape=RoundedCornerShape(13.dp))
             Spacer(Modifier.height(10.dp))
             OutlinedTextField(value=ownerPhone,onValueChange=onOwnerPhone,modifier=Modifier.fillMaxWidth(),singleLine=true,label={Text("Téléphone du propriétaire")},placeholder={Text("+257 …")},shape=RoundedCornerShape(13.dp))
@@ -880,7 +884,7 @@ private fun formatInternationalPhone(raw:String):String{
                     Icon(Icons.Default.Logout,null);Spacer(Modifier.width(8.dp));Text("Déconnecter ce compte")
                 }
             }
-            Text("Connecte ton compte Google à ORION. Cette connexion ne sauvegarde aucun SMS et n’active aucune synchronisation automatiquement.",color=muted,fontSize=12.sp,modifier=Modifier.padding(top=12.dp))
+            Text("Connecte ton compte Google à SamSim. Cette connexion ne sauvegarde aucun SMS et n’active aucune synchronisation automatiquement.",color=muted,fontSize=12.sp,modifier=Modifier.padding(top=12.dp))
             if(!googleMessage.isNullOrBlank())Text(googleMessage,color=if(googleEmail!=null)Color(0xFF34A853) else muted,fontSize=12.sp,modifier=Modifier.padding(top=9.dp))
             Spacer(Modifier.height(14.dp))
             HorizontalDivider(color=muted.copy(alpha=.2f))
@@ -899,12 +903,12 @@ private fun formatInternationalPhone(raw:String):String{
                 }
             }
             Row(verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.Backup,null,tint=iBlue);Spacer(Modifier.width(8.dp));Text("Sauvegarder et restaurer les SMS",color=ink,fontSize=14.sp,fontWeight=FontWeight.SemiBold)}
-            Text("Les sauvegardes sont privées et liées au compte Google connecté. ORION ne transmet aucun SMS sans cette fonction activée.",color=muted,fontSize=11.sp,modifier=Modifier.padding(top=5.dp))
+            Text("Les sauvegardes sont privées et liées au compte Google connecté. SamSim ne transmet aucun SMS sans cette fonction activée.",color=muted,fontSize=11.sp,modifier=Modifier.padding(top=5.dp))
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment=Alignment.CenterVertically){
                 Column(Modifier.weight(1f)){
                     Text("Sauvegarde automatique en Wi-Fi",color=ink,fontWeight=FontWeight.Medium)
-                    Text("ORION vérifie régulièrement le Wi-Fi et sauvegarde les nouveaux SMS.",color=muted,fontSize=11.sp)
+                    Text("SamSim vérifie régulièrement le Wi-Fi et sauvegarde les nouveaux SMS.",color=muted,fontSize=11.sp)
                 }
                 Switch(checked=autoBackup,onCheckedChange={enabled->
                     autoBackup=enabled
@@ -945,7 +949,7 @@ private fun formatInternationalPhone(raw:String):String{
                 Icon(Icons.Default.CloudDownload,null);Spacer(Modifier.width(8.dp));Text("Restaurer les SMS")
             }
             Text(backupStatus,color=muted,fontSize=11.sp,modifier=Modifier.padding(top=8.dp))
-            Text("La restauration ajoute uniquement les SMS absents du téléphone. Elle ne supprime aucun message local. ORION doit être l’application SMS par défaut pour restaurer.",color=muted,fontSize=10.sp,modifier=Modifier.padding(top=5.dp))
+            Text("La restauration ajoute uniquement les SMS absents du téléphone. Elle ne supprime aucun message local. SamSim doit être l’application SMS par défaut pour restaurer.",color=muted,fontSize=10.sp,modifier=Modifier.padding(top=5.dp))
         }
         Spacer(Modifier.height(22.dp));SectionTitle("DÉFILEMENT",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
@@ -989,11 +993,11 @@ private fun formatInternationalPhone(raw:String):String{
             Text("La police ne sera appliquée à toute l’application qu’après validation.",color=muted,fontSize=11.sp,modifier=Modifier.padding(top=8.dp))
         }
         Spacer(Modifier.height(22.dp));SectionTitle("À PROPOS",muted)
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).clickable(onClick=onAbout).padding(16.dp),verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.Info,null,tint=iBlue);Spacer(Modifier.width(12.dp));Text("À propos d’ORION",color=ink,modifier=Modifier.weight(1f));Icon(Icons.Default.ChevronRight,null,tint=muted)}
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).clickable(onClick=onAbout).padding(16.dp),verticalAlignment=Alignment.CenterVertically){Icon(Icons.Default.Info,null,tint=iBlue);Spacer(Modifier.width(12.dp));Text("À propos d’SamSim",color=ink,modifier=Modifier.weight(1f));Icon(Icons.Default.ChevronRight,null,tint=muted)}
         Spacer(Modifier.height(22.dp));SectionTitle("CONFIDENTIALITÉ",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
             Text("Noms de tes contacts",color=ink,fontWeight=FontWeight.SemiBold)
-            Text("ORION utilise l'autorisation Contacts pour associer les numéros aux noms enregistrés dans ton carnet d'adresses.",color=muted,fontSize=12.sp)
+            Text("SamSim utilise l'autorisation Contacts pour associer les numéros aux noms enregistrés dans ton carnet d'adresses.",color=muted,fontSize=12.sp)
         }
         Spacer(Modifier.height(28.dp))
     }
@@ -1005,7 +1009,7 @@ private fun formatInternationalPhone(raw:String):String{
             Icon(Icons.Default.Sms,null,tint=Color.White,modifier=Modifier.size(48.dp))
         }
         Spacer(Modifier.height(18.dp))
-        Text("ORION Messages",fontSize=25.sp,fontWeight=FontWeight.Bold,color=ink)
+        Text("SamSim Messages",fontSize=25.sp,fontWeight=FontWeight.Bold,color=ink)
         Text("Messagerie SMS Android",fontSize=14.sp,color=muted)
         Spacer(Modifier.height(26.dp))
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(18.dp)){
@@ -1016,7 +1020,7 @@ private fun formatInternationalPhone(raw:String):String{
             HorizontalDivider(Modifier.padding(vertical=13.dp),color=muted.copy(alpha=.25f))
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
                 Text("Application",color=ink,modifier=Modifier.weight(1f))
-                Text("ORION",color=muted)
+                Text("SamSim",color=muted)
             }
             HorizontalDivider(Modifier.padding(vertical=13.dp),color=muted.copy(alpha=.25f))
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
@@ -1025,7 +1029,7 @@ private fun formatInternationalPhone(raw:String):String{
             }
         }
         Spacer(Modifier.height(20.dp))
-        Text("ORION Messages — une messagerie conçue pour Android.",color=muted,fontSize=12.sp)
+        Text("SamSim Messages — une messagerie conçue pour Android.",color=muted,fontSize=12.sp)
     }
 }
 @Composable private fun SectionTitle(value:String,color:Color){Text(value,color=color,fontSize=11.sp,fontWeight=FontWeight.Bold,letterSpacing=1.3.sp);Spacer(Modifier.height(9.dp))}
@@ -1160,7 +1164,7 @@ private fun Modifier.discussionTunnelScrollEffect(state:LazyListState,itemKey:St
 private fun copyTextToClipboard(ctx:Context,text:String):Boolean{
     if(text.isBlank())return false
     val clipboard=ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager ?: return false
-    clipboard.setPrimaryClip(ClipData.newPlainText("ORION Messages",text))
+    clipboard.setPrimaryClip(ClipData.newPlainText("SamSim Messages",text))
     return true
 }
 private fun deleteSmsByIds(ctx:Context,ids:Set<Long>):Int{
@@ -1178,6 +1182,16 @@ private fun deleteConversation(ctx:Context,address:String):Int{
     }}
     return deleteSmsByIds(ctx,ids.toSet())
 }
+private fun shareSamSimApp(ctx:Context){
+    val downloadUrl="https://github.com/samuelniyonyishu35-hub/Orion-message-/releases/latest"
+    val message="Découvre SamSim, l’application de messagerie pour Android. Télécharge-la ici : $downloadUrl"
+    val sendIntent=Intent(Intent.ACTION_SEND).setType("text/plain")
+        .putExtra(Intent.EXTRA_SUBJECT,"Découvrir SamSim")
+        .putExtra(Intent.EXTRA_TEXT,message)
+    runCatching{ctx.startActivity(Intent.createChooser(sendIntent,"Partager SamSim"))}
+        .onFailure{Toast.makeText(ctx,"Impossible d’ouvrir le partage.",Toast.LENGTH_LONG).show()}
+}
+
 private fun shareTextWithChooser(ctx:Context,text:String){
     if(text.isBlank())return
     val intent=Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,text)

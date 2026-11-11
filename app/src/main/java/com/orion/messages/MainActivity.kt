@@ -266,6 +266,8 @@ class MainActivity:ComponentActivity(){
     val messages=remember(tick,thread?.address){thread?.address?.takeIf{it.isNotBlank()}?.let{readMessages(ctx,it)}?: emptyList()}
     var fontChoice by remember{mutableStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getString("font","System")?:"System")}
     var fontScale by remember{mutableFloatStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getFloat("font_scale",1f))}
+    var scrollEffectEnabled by remember{mutableStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getBoolean("scroll_effect_enabled",true))}
+    var scrollEffectIntensity by remember{mutableFloatStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getFloat("scroll_effect_intensity",0.65f))}
     val baseDensity=LocalDensity.current
     val appFont=fontFamilyForChoice(ctx,fontChoice)
     val appWeight=when(fontChoice){"Light"->FontWeight.Light;"Bold"->FontWeight.Bold;else->FontWeight.Normal}
@@ -337,11 +339,11 @@ class MainActivity:ComponentActivity(){
                     screenMessages=if(address.isNullOrBlank()) emptyList() else withContext(Dispatchers.IO){readMessages(ctx,address)}
                 }
                 when {
-                    screen.page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,themeMode,{mode->themeMode=mode;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("theme_mode",mode).apply()},ownerName,{value->ownerName=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_name",value).apply()},ownerPhone,{value->ownerPhone=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_phone",value).apply()},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},fontScale,{value->fontScale=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putFloat("font_scale",value).apply()},setDefault,{page="about"},googleEmail,googleBusy,googleMessage,onGoogleSignIn,onGoogleSignOut)
+                    screen.page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,themeMode,{mode->themeMode=mode;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("theme_mode",mode).apply()},ownerName,{value->ownerName=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_name",value).apply()},ownerPhone,{value->ownerPhone=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_phone",value).apply()},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},fontScale,{value->fontScale=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putFloat("font_scale",value).apply()},scrollEffectEnabled,{value->scrollEffectEnabled=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putBoolean("scroll_effect_enabled",value).apply()},scrollEffectIntensity,{value->scrollEffectIntensity=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putFloat("scroll_effect_intensity",value).apply()},setDefault,{page="about"},googleEmail,googleBusy,googleMessage,onGoogleSignIn,onGoogleSignOut)
                     screen.page=="about" -> AboutScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted)
                     screen.page=="profile" && screen.thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),screen.thread,contacts,ink,muted,surface,ctx,call,{page="chat"},{message->status=message})
-                    screen.page=="compose" -> NewMessageScreen(Modifier.fillMaxSize().padding(pad),contacts,composeQuery,{composeQuery=it;composeNotice=""},{contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;draft="";page="chat";status=""},{raw->val cleaned=raw.trim();val digits=cleaned.filter{it.isDigit()};val found=contacts.firstOrNull{it.name.equals(cleaned,true)||it.number.filter{ch->ch.isDigit()}==digits}?:contacts.firstOrNull{it.name.startsWith(cleaned,true)};if(found!=null||digits.length in 7..15){val dest=found?.number?:cleaned;val label=found?.name?:dest;thread=ThreadItem(dest,"",0,label);number=dest;draft="";page="chat";status=""}else composeNotice="Aucun contact correspondant. Vérifie le nom ou saisis un numéro valide."},composeNotice,{composeNotice=it})
-                    screen.thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,conversations,contacts,query,{query=it},homeListState,
+                    screen.page=="compose" -> NewMessageScreen(Modifier.fillMaxSize().padding(pad),contacts,composeQuery,{composeQuery=it;composeNotice=""},{contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;draft="";page="chat";status=""},{raw->val cleaned=raw.trim();val digits=cleaned.filter{it.isDigit()};val found=contacts.firstOrNull{it.name.equals(cleaned,true)||it.number.filter{ch->ch.isDigit()}==digits}?:contacts.firstOrNull{it.name.startsWith(cleaned,true)};if(found!=null||digits.length in 7..15){val dest=found?.number?:cleaned;val label=found?.name?:dest;thread=ThreadItem(dest,"",0,label);number=dest;draft="";page="chat";status=""}else composeNotice="Aucun contact correspondant. Vérifie le nom ou saisis un numéro valide."},composeNotice,{composeNotice=it},scrollEffectEnabled,scrollEffectIntensity)
+                    screen.thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,conversations,contacts,query,{query=it},homeListState,scrollEffectEnabled,scrollEffectIntensity,
                         {item->
                             thread=item.copy(unreadCount=0)
                             number=item.address
@@ -353,7 +355,7 @@ class MainActivity:ComponentActivity(){
                             }
                         },
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
-                    else -> ChatScreen(Modifier.fillMaxSize().padding(pad).imePadding(),screen.thread,screenMessages,appFont,appWeight,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
+                    else -> ChatScreen(Modifier.fillMaxSize().padding(pad).imePadding(),screen.thread,screenMessages,appFont,appWeight,scrollEffectEnabled,scrollEffectIntensity,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
                         {photoPicker.launch("image/*")},{cameraPicker.launch(null)},{photoUri=null},{uri->
                             val dest=screen.thread!!.address.ifBlank{number}.trim()
                             if(dest.isBlank())status="Saisis le numéro du destinataire avant de joindre une photo."
@@ -407,7 +409,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-@Composable private fun HomeScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,threads:List<ThreadItem>,contacts:List<ContactItem>,query:String,onQuery:(String)->Unit,listState:LazyListState,onOpen:(ThreadItem)->Unit,onContact:(ContactItem)->Unit){
+@Composable private fun HomeScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,threads:List<ThreadItem>,contacts:List<ContactItem>,query:String,onQuery:(String)->Unit,listState:LazyListState,scrollEffectEnabled:Boolean,scrollEffectIntensity:Float,onOpen:(ThreadItem)->Unit,onContact:(ContactItem)->Unit){
     var selectedThreads by remember{mutableStateOf(setOf<String>())}
     val normalizedQuery=query.filter{it.isDigit()}
     val matchingThreads=threads.filter{
@@ -461,7 +463,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
                 val isSelected=selectedThreads.contains(item.address)
                 Box(
                     Modifier.fillMaxWidth()
-                        .discussionTunnelScrollEffect(listState,item.address)
+                        .discussionTunnelScrollEffect(listState,item.address,scrollEffectEnabled,scrollEffectIntensity)
                         .padding(horizontal=8.dp,vertical=3.dp)
                         .clip(RoundedCornerShape(18.dp))
                         .background(if(isSelected)iBlue.copy(alpha=.12f) else Color.Transparent)
@@ -489,7 +491,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
     }
 }
 
-@Composable private fun NewMessageScreen(mod:Modifier,contacts:List<ContactItem>,query:String,onQuery:(String)->Unit,onContact:(ContactItem)->Unit,onSubmit:(String)->Unit,notice:String,onNotice:(String)->Unit){
+@Composable private fun NewMessageScreen(mod:Modifier,contacts:List<ContactItem>,query:String,onQuery:(String)->Unit,onContact:(ContactItem)->Unit,onSubmit:(String)->Unit,notice:String,onNotice:(String)->Unit,scrollEffectEnabled:Boolean=true,scrollEffectIntensity:Float=0.65f){
     val normalized=query.filter{it.isDigit()}
     val filtered=contacts.filter{query.isBlank()||it.name.contains(query,true)||it.number.contains(query,true)||(normalized.length>=2&&it.number.filter{ch->ch.isDigit()}.contains(normalized))}
     Column(mod.padding(horizontal=16.dp)){
@@ -508,7 +510,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
             val contactsListState= rememberLazyListState()
             LazyColumn(state=contactsListState,contentPadding=PaddingValues(bottom=28.dp)){
             items(filtered,key={it.number}){contact->
-                Row(Modifier.fillMaxWidth().discussionTunnelScrollEffect(contactsListState,contact.number).clickable{onContact(contact)}.padding(vertical=11.dp),verticalAlignment=Alignment.CenterVertically){
+                Row(Modifier.fillMaxWidth().discussionTunnelScrollEffect(contactsListState,contact.number,scrollEffectEnabled,scrollEffectIntensity).clickable{onContact(contact)}.padding(vertical=11.dp),verticalAlignment=Alignment.CenterVertically){
                     Avatar(contact.name,46)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)){
@@ -525,11 +527,12 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-@Composable private fun ChatScreen(mod:Modifier,item:ThreadItem,messages:List<SmsRecord>,font:FontFamily,fontWeight:FontWeight,number:String,onNumber:(String)->Unit,draft:String,onDraft:(String)->Unit,status:String,photoUri:Uri?,photoPreview:ImageBitmap?,onPickPhoto:()->Unit,onTakePhoto:()->Unit,onRemovePhoto:()->Unit,onSendPhoto:(Uri)->Unit,ink:Color,muted:Color,surface:Color,onProfile:()->Unit,onCall:()->Unit,onSend:()->Unit){
+@Composable private fun ChatScreen(mod:Modifier,item:ThreadItem,messages:List<SmsRecord>,font:FontFamily,fontWeight:FontWeight,scrollEffectEnabled:Boolean,scrollEffectIntensity:Float,number:String,onNumber:(String)->Unit,draft:String,onDraft:(String)->Unit,status:String,photoUri:Uri?,photoPreview:ImageBitmap?,onPickPhoto:()->Unit,onTakePhoto:()->Unit,onRemovePhoto:()->Unit,onSendPhoto:(Uri)->Unit,ink:Color,muted:Color,surface:Color,onProfile:()->Unit,onCall:()->Unit,onSend:()->Unit){
     val context=LocalContext.current
     var currentTime by remember{mutableLongStateOf(System.currentTimeMillis())}
     LaunchedEffect(Unit){while(true){kotlinx.coroutines.delay(60_000);currentTime=System.currentTimeMillis()}}
     var selectedMessages by remember{mutableStateOf(setOf<Long>())}
+    val messageListState=rememberLazyListState()
     val cannotReply=item.address.isNotBlank() && item.address.count{it.isDigit()} !in 7..15
     var attachMenu by remember{mutableStateOf(false)}
     var recorder by remember{mutableStateOf<MediaRecorder?>(null)}
@@ -583,12 +586,12 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
         }
         if(messages.isEmpty())Box(Modifier.weight(1f).fillMaxWidth().padding(top=14.dp),contentAlignment=Alignment.Center){
             Column(horizontalAlignment=Alignment.CenterHorizontally){Avatar(item.displayName,62);Spacer(Modifier.height(10.dp));Text(item.displayName,color=ink,fontWeight=FontWeight.SemiBold,fontSize=17.sp);Text(if(item.address.isBlank())"Nouveau message" else item.address,color=muted,fontSize=13.sp)}
-        }else LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top=12.dp),contentPadding=PaddingValues(vertical=12.dp),verticalArrangement=Arrangement.spacedBy(9.dp)){
+        }else LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top=12.dp),state=messageListState,contentPadding=PaddingValues(vertical=12.dp),verticalArrangement=Arrangement.spacedBy(9.dp)){
             itemsIndexed(messages,key={_,message->message.id}){index,message->
                 val outgoing=message.type!=Telephony.Sms.MESSAGE_TYPE_INBOX
                 val newDay=index==0 || !sameCalendarDay(messages[index-1].date,message.date)
                 if(newDay) Text(messageDayLabel(message.date,currentTime),color=muted,fontSize=12.sp,fontWeight=FontWeight.Medium,modifier=Modifier.fillMaxWidth().padding(vertical=7.dp),textAlign=androidx.compose.ui.text.style.TextAlign.Center)
-                Column(Modifier.fillMaxWidth().combinedClickable(onClick={if(selectedMessages.isNotEmpty())selectedMessages=if(selectedMessages.contains(message.id))selectedMessages-message.id else selectedMessages+message.id},onLongClick={selectedMessages=selectedMessages+message.id}).background(if(selectedMessages.contains(message.id))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=2.dp),horizontalAlignment=if(outgoing)Alignment.End else Alignment.Start){
+                Column(Modifier.fillMaxWidth().discussionTunnelScrollEffect(messageListState,message.id.toString(),scrollEffectEnabled,scrollEffectIntensity).combinedClickable(onClick={if(selectedMessages.isNotEmpty())selectedMessages=if(selectedMessages.contains(message.id))selectedMessages-message.id else selectedMessages+message.id},onLongClick={selectedMessages=selectedMessages+message.id}).background(if(selectedMessages.contains(message.id))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=2.dp),horizontalAlignment=if(outgoing)Alignment.End else Alignment.Start){
                     Box(Modifier.widthIn(max=310.dp).clip(if(outgoing)RoundedCornerShape(21.dp,21.dp,5.dp,21.dp) else RoundedCornerShape(21.dp,21.dp,21.dp,5.dp)).background(if(outgoing)iBlue else surface).padding(horizontal=16.dp,vertical=11.dp)){
                         Text(message.body,color=if(outgoing)Color.White else ink,fontSize=16.sp,lineHeight=22.sp,fontFamily=font,fontWeight=fontWeight)
                     }
@@ -723,7 +726,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
     }
 }
 
-@Composable private fun SettingsScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,themeMode:String,onThemeMode:(String)->Unit,ownerName:String,onOwnerName:(String)->Unit,ownerPhone:String,onOwnerPhone:(String)->Unit,sims:List<SimChoice>,selected:Int,onSim:(Int)->Unit,fontChoice:String,onFont:(String)->Unit,fontScale:Float,onFontScale:(Float)->Unit,onDefault:()->Unit,onAbout:()->Unit,googleEmail:String?,googleBusy:Boolean,googleMessage:String?,onGoogleSignIn:()->Unit,onGoogleSignOut:()->Unit){
+@Composable private fun SettingsScreen(mod:Modifier,ctx:Context,surface:Color,ink:Color,muted:Color,themeMode:String,onThemeMode:(String)->Unit,ownerName:String,onOwnerName:(String)->Unit,ownerPhone:String,onOwnerPhone:(String)->Unit,sims:List<SimChoice>,selected:Int,onSim:(Int)->Unit,fontChoice:String,onFont:(String)->Unit,fontScale:Float,onFontScale:(Float)->Unit,scrollEffectEnabled:Boolean,onScrollEffectEnabled:(Boolean)->Unit,scrollEffectIntensity:Float,onScrollEffectIntensity:(Float)->Unit,onDefault:()->Unit,onAbout:()->Unit,googleEmail:String?,googleBusy:Boolean,googleMessage:String?,onGoogleSignIn:()->Unit,onGoogleSignOut:()->Unit){
     var previewChoice by remember(fontChoice){mutableStateOf(fontChoice)}
     val choices=listOf("System","San Francisco","Roboto","Rounded","Handwritten","Elegant","Typewriter","Condensed","Lato","Pacifico","Dancing Script","Light","Bold")
     fun fontLabel(choice:String)=when(choice){"System"->"Police du système";"San Francisco"->"Style San Francisco (Inter)";"Handwritten"->"Manuscrite / stylo";"Elegant"->"Élégante";"Typewriter"->"Machine à écrire";"Pacifico"->"Manuscrite — Pacifico";"Dancing Script"->"Manuscrite — Dancing Script";else->choice}
@@ -849,6 +852,20 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
             }
             Text(backupStatus,color=muted,fontSize=11.sp,modifier=Modifier.padding(top=8.dp))
             Text("La restauration ajoute uniquement les SMS absents du téléphone. Elle ne supprime aucun message local. ORION doit être l’application SMS par défaut pour restaurer.",color=muted,fontSize=10.sp,modifier=Modifier.padding(top=5.dp))
+        }
+        Spacer(Modifier.height(22.dp));SectionTitle("DÉFILEMENT",muted)
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
+            Row(verticalAlignment=Alignment.CenterVertically){
+                Column(Modifier.weight(1f)){
+                    Text("Effet de profondeur vertical",color=ink,fontWeight=FontWeight.SemiBold)
+                    Text("Courbure progressive des éléments pendant le défilement.",color=muted,fontSize=12.sp)
+                }
+                Switch(checked=scrollEffectEnabled,onCheckedChange=onScrollEffectEnabled)
+            }
+            Text("INTENSITÉ · ${(scrollEffectIntensity*100).toInt()} %",color=muted,fontSize=10.sp,fontWeight=FontWeight.Bold,letterSpacing=1.sp,modifier=Modifier.padding(top=12.dp))
+            Slider(value=scrollEffectIntensity,onValueChange=onScrollEffectIntensity,valueRange=0.2f..1f,steps=7,enabled=scrollEffectEnabled)
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text("Discret",color=muted,fontSize=11.sp);Text("Prononcé",color=muted,fontSize=11.sp)}
+            Text("L’effet s’applique aux discussions, aux contacts et aux messages.",color=muted,fontSize=11.sp,modifier=Modifier.padding(top=8.dp))
         }
         Spacer(Modifier.height(22.dp));SectionTitle("POLICE D’ÉCRITURE",muted)
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(surface).padding(16.dp)){
@@ -1029,19 +1046,19 @@ private fun Modifier.tunnelScrollEffect(state:LazyListState,itemKey:String):Modi
     }
 }
 
-private fun Modifier.discussionTunnelScrollEffect(state:LazyListState,itemKey:String):Modifier = graphicsLayer {
+private fun Modifier.discussionTunnelScrollEffect(state:LazyListState,itemKey:String,enabled:Boolean=true,intensity:Float=0.65f):Modifier = graphicsLayer {
     val visible=state.layoutInfo.visibleItemsInfo.firstOrNull{it.key==itemKey}
-    if(visible!=null){
+    if(visible!=null && enabled){
+        val strength=intensity.coerceIn(0.2f,1f)
         val height=(state.layoutInfo.viewportEndOffset-state.layoutInfo.viewportStartOffset).toFloat().coerceAtLeast(1f)
         val viewportCenter=state.layoutInfo.viewportStartOffset+height/2f
         val itemCenter=visible.offset+visible.size/2f
-        // The discussion tunnel begins at the vertical center; rows above it remain undistorted.
         val progress=((itemCenter-viewportCenter)/(height/2f)).coerceIn(0f,1f)
-        scaleX=1f-progress*0.10f
-        scaleY=1f-progress*0.12f
-        alpha=1f-progress*0.28f
-        rotationX=progress*10f
-        translationY=progress*7f
+        scaleX=1f-progress*0.10f*strength
+        scaleY=1f-progress*0.12f*strength
+        alpha=1f-progress*0.28f*strength
+        rotationX=progress*10f*strength
+        translationY=progress*7f*strength
         cameraDistance=24f*density
     }
 }

@@ -72,10 +72,12 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
-      - name: Publish SamSim APK release
-        if: startsWith(github.ref, 'refs/tags/samsim-v')
+      - name: Publish SamSim 1.0.3 public release
+        if: github.ref == 'refs/heads/feature/sms-cloud-backup' && github.event.head_commit.message == 'Publier SamSim 1.0.3'
         uses: softprops/action-gh-release@v2
         with:
-          name: SamSim ${{ github.ref_name }}
+          tag_name: samsim-v1.0.3
+          name: SamSim 1.0.3
+          target_commitish: ${{ github.sha }}
           generate_release_notes: true
           files: app/build/outputs/apk/debug/app-debug.apk

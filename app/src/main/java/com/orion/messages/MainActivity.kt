@@ -649,6 +649,11 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
     val number=item.address
     var blocked by remember(number){mutableStateOf(runCatching{BlockedNumberContract.canCurrentUserBlockNumbers(ctx) && BlockedNumberContract.isBlocked(ctx,number)}.getOrDefault(false))}
     val contact=contacts.firstOrNull{normalizePhone(it.number)==normalizePhone(number)}
+    val profilePrefs=remember(ctx){ctx.getSharedPreferences("orion_contact_profiles",Context.MODE_PRIVATE)}
+    val profileKey=remember(number){java.security.MessageDigest.getInstance("SHA-256").digest(number.trim().toByteArray()).joinToString(""){"%02x".format(it)}}
+    var customName by remember(number){mutableStateOf(profilePrefs.getString("name_$profileKey",null).orEmpty())}
+    var editingProfile by remember{mutableStateOf(false)}
+    var editName by remember(number){mutableStateOf(customName.ifBlank{item.displayName})}
     var photoVersion by remember(number){mutableIntStateOf(0)}
     val photoPicker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->
         if(uri!=null){
@@ -668,10 +673,13 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
             if(profilePhoto!=null) Image(bitmap=profilePhoto,contentDescription="Photo de ${item.displayName}",modifier=Modifier.fillMaxSize(),contentScale=ContentScale.Crop)
             else Text(item.displayName.take(1).uppercase(),color=Color.White,fontSize=43.sp,fontWeight=FontWeight.Medium)
         }
-        Spacer(Modifier.height(12.dp));Text(item.displayName,fontSize=24.sp,fontWeight=FontWeight.Bold,color=ink)
+        Spacer(Modifier.height(12.dp));Text(customName.ifBlank{item.displayName},fontSize=24.sp,fontWeight=FontWeight.Bold,color=ink)
         Spacer(Modifier.height(12.dp))
-        ProfileAction("Modifier la photo",Icons.Default.PhotoCamera,Modifier.fillMaxWidth(.62f),surface,ink){photoPicker.launch("image/*")}
-        Text(number,color=muted,fontSize=14.sp)
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
+            ProfileAction("Modifier le profil",Icons.Default.Edit,Modifier.weight(1f),surface,ink){editName=customName.ifBlank{item.displayName};editingProfile=true}
+            ProfileAction("Modifier la photo",Icons.Default.PhotoCamera,Modifier.weight(1f),surface,ink){photoPicker.launch("image/*")}
+        }
+        Text(formatInternationalPhone(number),color=muted,fontSize=14.sp)
         Spacer(Modifier.height(22.dp))
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)){
             ProfileAction("message",Icons.Default.Message,Modifier.weight(1f),surface,ink){onMessage()}
@@ -693,8 +701,33 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
         Column(Modifier.fillMaxWidth().padding(vertical=17.dp)){
             Text("INFORMATIONS",fontSize=11.sp,color=muted,fontWeight=FontWeight.Bold,letterSpacing=1.2.sp)
             Spacer(Modifier.height(14.dp))
-            Text("Téléphone",fontSize=12.sp,color=muted);Text(number,fontSize=16.sp,color=ink,modifier=Modifier.padding(top=4.dp))
+            Text("Téléphone",fontSize=12.sp,color=muted);Text(formatInternationalPhone(number),fontSize=16.sp,color=ink,modifier=Modifier.padding(top=4.dp))
             if(contact!=null){Spacer(Modifier.height(14.dp));Text("Nom dans les contacts",fontSize=12.sp,color=muted);Text(contact.name,fontSize=16.sp,color=ink,modifier=Modifier.padding(top=4.dp))}
+            if(customName.isNotBlank()){Spacer(Modifier.height(14.dp));Text("Nom du profil ORION",fontSize=12.sp,color=muted);Text(customName,fontSize=16.sp,color=ink,modifier=Modifier.padding(top=4.dp))}
+        }
+        Spacer(Modifier.height(8.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(surface).padding(8.dp)){
+            Row(Modifier.fillMaxWidth().clickable{
+                runCatching{contactPhotoFile(ctx,number).delete()}
+                profilePrefs.edit().remove("name_$profileKey").apply()
+                customName=""
+                photoVersion++
+                editName=item.displayName
+                onBlockResult("Profil ORION supprimé. Les contacts et les SMS sont conservés.")
+            }.padding(12.dp),verticalAlignment=Alignment.CenterVertically){
+                Icon(Icons.Default.Delete,null,tint=Color(0xFFFF453A));Spacer(Modifier.width(12.dp));Text("Supprimer le profil ORION",color=Color(0xFFFF453A),fontSize=14.sp)
+            }
+            HorizontalDivider(color=muted.copy(alpha=.2f))
+            Row(Modifier.fillMaxWidth().clickable{
+                runCatching{contactPhotoFile(ctx,number).delete()}
+                profilePrefs.edit().remove("name_$profileKey").apply()
+                customName=""
+                photoVersion++
+                editName=item.displayName
+                onBlockResult("Profil rétabli par défaut. Aucun contact ni SMS n’a été supprimé.")
+            }.padding(12.dp),verticalAlignment=Alignment.CenterVertically){
+                Icon(Icons.Default.RestartAlt,null,tint=iBlue);Spacer(Modifier.width(12.dp));Text("Rétablir le profil par défaut",color=ink,fontSize=14.sp)
+            }
         }
         HorizontalDivider(color=muted.copy(alpha=.3f))
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(surface).clickable{
@@ -718,6 +751,44 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
         }
         Spacer(Modifier.height(8.dp));Text("Le blocage dépend des fonctions de blocage prises en charge par Android sur cet appareil.",fontSize=11.sp,color=muted)
     }
+    if(editingProfile) AlertDialog(
+        onDismissRequest={editingProfile=false},
+        title={Text("Modifier le profil ORION")},
+        text={Column{
+            OutlinedTextField(value=editName,onValueChange={editName=it},singleLine=true,label={Text("Nom du profil")},modifier=Modifier.fillMaxWidth())
+            Text("Ce nom sera enregistré uniquement dans ORION. Le répertoire Android ne sera pas modifié.",fontSize=12.sp,color=muted,modifier=Modifier.padding(top=8.dp))
+        }},
+        confirmButton={TextButton(onClick={
+            val clean=editName.trim()
+            profilePrefs.edit().putString("name_$profileKey",clean).apply()
+            customName=clean
+            editingProfile=false
+            onBlockResult("Profil ORION mis à jour.")
+        }){Text("Enregistrer")}},
+        dismissButton={TextButton(onClick={editingProfile=false}){Text("Annuler")}}
+    )
+}
+
+private fun formatInternationalPhone(raw:String):String{
+    var value=raw.trim()
+    if(value.startsWith("00")) value="+"+value.drop(2)
+    val digits=value.filter{it.isDigit()}
+    val international=when{
+        value.startsWith("+")->digits
+        digits.length==8->"257$digits"
+        else->return value
+    }
+    if(international.startsWith("257") && international.length==11){
+        return "+257 "+international.substring(3,5)+" "+international.substring(5,7)+" "+international.substring(7,9)+" "+international.substring(9,11)
+    }
+    val countryLength=when{
+        international.length>=12->3
+        international.length>=11->2
+        else->1
+    }.coerceAtMost(international.length-7)
+    val country=international.take(countryLength)
+    val national=international.drop(countryLength)
+    return "+"+country+" "+national.chunked(2).joinToString(" ")
 }
 
 @Composable private fun ProfileAction(label:String,icon:androidx.compose.ui.graphics.vector.ImageVector,modifier:Modifier,surface:Color,ink:Color,onClick:()->Unit){

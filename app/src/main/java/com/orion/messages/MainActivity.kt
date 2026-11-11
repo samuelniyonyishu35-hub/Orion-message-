@@ -439,16 +439,16 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
                     val visible = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == item.address }
                     if (visible != null) {
                         val viewportHeight = (listState.layoutInfo.viewportEndOffset - listState.layoutInfo.viewportStartOffset).toFloat().coerceAtLeast(1f)
-                        val viewportCenter = (listState.layoutInfo.viewportStartOffset + listState.layoutInfo.viewportEndOffset) / 2f
                         val itemCenter = visible.offset + visible.size / 2f
-                        val signedDistance = ((itemCenter - viewportCenter) / (viewportHeight / 2f)).coerceIn(-1f, 1f)
-                        val distance = kotlin.math.abs(signedDistance)
-                        val depth = 1f - distance
+                        // Le tunnel part du haut de la liste : le premier élément visible reste net,
+                        // puis la profondeur augmente progressivement vers le bas pendant le défilement.
+                        val progressFromTop = ((itemCenter - listState.layoutInfo.viewportStartOffset) / viewportHeight).coerceIn(0f, 1f)
+                        val depth = 1f - progressFromTop
                         scaleX = 0.84f + depth * 0.16f
                         scaleY = 0.78f + depth * 0.22f
                         alpha = 0.38f + depth * 0.62f
-                        rotationX = -signedDistance * 17f
-                        translationY = signedDistance * 13f
+                        rotationX = progressFromTop * 17f
+                        translationY = progressFromTop * 13f
                         cameraDistance = 18f * density
                     }
                 }.animateContentSize(animationSpec=spring(dampingRatio=0.82f,stiffness=420f)).combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}).background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent).padding(vertical=12.dp),verticalAlignment=Alignment.CenterVertically){

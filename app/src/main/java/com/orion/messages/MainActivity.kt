@@ -101,6 +101,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val iBlue = Color(0xFF087CFA)
 private val iGray = Color(0xFF8E8E93)
@@ -234,6 +236,7 @@ class MainActivity:ComponentActivity(){
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable fun OrionApp(ctx:Context,tick:Int,refresh:()->Unit,setDefault:()->Unit,call:(String)->Unit,send:(String,String,Int?,(String)->Unit)->Unit,googleEmail:String?,googleBusy:Boolean,googleMessage:String?,onGoogleSignIn:()->Unit,onGoogleSignOut:()->Unit){
     var page by remember{mutableStateOf("home")}
+    val uiScope=rememberCoroutineScope()
     var thread by remember{mutableStateOf<ThreadItem?>(null)}
     var themeMode by remember{mutableStateOf(ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).getString("theme_mode","system")?:"system")}
     val systemDark=isSystemInDarkTheme()
@@ -319,22 +322,35 @@ class MainActivity:ComponentActivity(){
                     val returning=targetState.page in setOf("home","settings","chat") &&
                         (initialState.page in setOf("chat","profile","about","compose","settings"))
                     if(returning) {
-                        (slideInHorizontally(initialOffsetX={-it/3},animationSpec=spring(dampingRatio=0.78f,stiffness=360f))+fadeIn(tween(220))) togetherWith
-                            (slideOutHorizontally(targetOffsetX={it/4},animationSpec=tween(210,easing=FastOutSlowInEasing))+fadeOut(tween(170)))
+                        (slideInHorizontally(initialOffsetX={-it/4},animationSpec=spring(dampingRatio=0.82f,stiffness=300f))+fadeIn(tween(260))) togetherWith
+                            (slideOutHorizontally(targetOffsetX={it/5},animationSpec=tween(220,easing=FastOutSlowInEasing))+fadeOut(tween(190)))
                     } else {
-                        (slideInHorizontally(initialOffsetX={it/3},animationSpec=spring(dampingRatio=0.78f,stiffness=360f))+fadeIn(tween(220))) togetherWith
-                            (slideOutHorizontally(targetOffsetX={-it/4},animationSpec=tween(210,easing=FastOutSlowInEasing))+fadeOut(tween(170)))
+                        (slideInHorizontally(initialOffsetX={it/4},animationSpec=spring(dampingRatio=0.82f,stiffness=300f))+fadeIn(tween(260))) togetherWith
+                            (slideOutHorizontally(targetOffsetX={-it/5},animationSpec=tween(220,easing=FastOutSlowInEasing))+fadeOut(tween(190)))
                     }
                 },label="orion-page"
             ){screen->
-                val screenMessages=remember(screen.thread?.address,tick){screen.thread?.address?.takeIf{it.isNotBlank()}?.let{readMessages(ctx,it)}?: emptyList()}
+                var screenMessages by remember(screen.thread?.address){mutableStateOf(emptyList<SmsRecord>())}
+                LaunchedEffect(screen.thread?.address,tick){
+                    val address=screen.thread?.address
+                    screenMessages=if(address.isNullOrBlank()) emptyList() else withContext(Dispatchers.IO){readMessages(ctx,address)}
+                }
                 when {
                     screen.page=="settings" -> SettingsScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,themeMode,{mode->themeMode=mode;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("theme_mode",mode).apply()},ownerName,{value->ownerName=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_name",value).apply()},ownerPhone,{value->ownerPhone=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("owner_phone",value).apply()},sims,sim,{sim=it},fontChoice,{fontChoice=it;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putString("font",it).apply()},fontScale,{value->fontScale=value;ctx.getSharedPreferences("orion_settings",Context.MODE_PRIVATE).edit().putFloat("font_scale",value).apply()},setDefault,{page="about"},googleEmail,googleBusy,googleMessage,onGoogleSignIn,onGoogleSignOut)
                     screen.page=="about" -> AboutScreen(Modifier.fillMaxSize().padding(pad),surface,ink,muted)
                     screen.page=="profile" && screen.thread!=null -> ProfileScreen(Modifier.fillMaxSize().padding(pad),screen.thread,contacts,ink,muted,surface,ctx,call,{page="chat"},{message->status=message})
                     screen.page=="compose" -> NewMessageScreen(Modifier.fillMaxSize().padding(pad),contacts,composeQuery,{composeQuery=it;composeNotice=""},{contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;draft="";page="chat";status=""},{raw->val cleaned=raw.trim();val digits=cleaned.filter{it.isDigit()};val found=contacts.firstOrNull{it.name.equals(cleaned,true)||it.number.filter{ch->ch.isDigit()}==digits}?:contacts.firstOrNull{it.name.startsWith(cleaned,true)};if(found!=null||digits.length in 7..15){val dest=found?.number?:cleaned;val label=found?.name?:dest;thread=ThreadItem(dest,"",0,label);number=dest;draft="";page="chat";status=""}else composeNotice="Aucun contact correspondant. Vérifie le nom ou saisis un numéro valide."},composeNotice,{composeNotice=it})
                     screen.thread==null -> HomeScreen(Modifier.fillMaxSize().padding(pad),ctx,surface,ink,muted,conversations,contacts,query,{query=it},homeListState,
-                        {item->markConversationRead(ctx,item.address);refresh();thread=item.copy(unreadCount=0);number=item.address;page="chat";status=""},
+                        {item->
+                            thread=item.copy(unreadCount=0)
+                            number=item.address
+                            page="chat"
+                            status=""
+                            uiScope.launch(Dispatchers.IO){
+                                markConversationRead(ctx,item.address)
+                                withContext(Dispatchers.Main){refresh()}
+                            }
+                        },
                         {contact->thread=ThreadItem(contact.number,"",0,contact.name);number=contact.number;page="chat";status=""})
                     else -> ChatScreen(Modifier.fillMaxSize().padding(pad).imePadding(),screen.thread,screenMessages,appFont,appWeight,number,{number=it},draft,{draft=it},status,photoUri,photoPreview,
                         {photoPicker.launch("image/*")},{cameraPicker.launch(null)},{photoUri=null},{uri->
@@ -448,7 +464,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
                         Text(item.displayName,color=ink,fontSize=16.sp,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)
                         Spacer(Modifier.height(3.dp));Text(item.body.ifBlank{"Message de ${item.displayName}"},color=muted,fontSize=14.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                     }
-                    if(item.unreadCount>0)Box(Modifier.padding(end=8.dp).sizeIn(minWidth=22.dp,minHeight=22.dp).clip(CircleShape).background(iBlue),contentAlignment=Alignment.Center){Text(item.unreadCount.toString(),color=Color.White,fontSize=11.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(horizontal=5.dp,vertical=2.dp))}
+                    if(item.unreadCount>0)Box(Modifier.padding(end=8.dp).size(20.dp).clip(CircleShape).background(iBlue),contentAlignment=Alignment.Center){Text(if(item.unreadCount>99)"99+" else item.unreadCount.toString(),color=Color.White,fontSize=if(item.unreadCount>9)8.sp else 10.sp,fontWeight=FontWeight.Bold,maxLines=1,letterSpacing=(-0.4).sp)}
                     Icon(Icons.Default.ChevronRight,null,tint=muted)
                 }
                 HorizontalDivider(color=muted.copy(alpha=.2f),modifier=Modifier.padding(start=63.dp))

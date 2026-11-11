@@ -368,7 +368,7 @@ class MainActivity:ComponentActivity(){
     }
 }
 @Composable private fun ContactAvatar(ctx:Context,address:String,name:String,size:Int){
-    val bitmap=remember(address){loadContactPhoto(ctx,address)?.asImageBitmap()}
+    val bitmap=loadContactPhoto(ctx,address)?.asImageBitmap()
     if(bitmap!=null) Image(bitmap=bitmap,contentDescription="Photo de $name",modifier=Modifier.size(size.dp).clip(CircleShape),contentScale=ContentScale.Crop)
     else Avatar(name,size)
 }

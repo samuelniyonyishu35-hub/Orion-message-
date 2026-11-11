@@ -1,0 +1,8 @@
+.gradle/
+**/build/
+build/
+build-error.txt
+local.properties
+.idea/
+*.jks
+*key-base64.txt

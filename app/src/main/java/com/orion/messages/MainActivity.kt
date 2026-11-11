@@ -457,7 +457,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
             }
         }else LazyColumn(state=listState,contentPadding=PaddingValues(bottom=100.dp)){
             items(matchingThreads,key={it.address}){item->
-                Box(Modifier.fillMaxWidth().tunnelScrollEffect(listState,item.address).animateContentSize(animationSpec=spring(dampingRatio=0.82f,stiffness=420f)).combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}) .background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent){
+                Box(Modifier.fillMaxWidth().tunnelScrollEffect(listState,item.address).animateContentSize(animationSpec=spring(dampingRatio=0.82f,stiffness=420f)).combinedClickable(onClick={if(selectedThreads.isNotEmpty())selectedThreads=if(selectedThreads.contains(item.address))selectedThreads-item.address else selectedThreads+item.address else onOpen(item)},onLongClick={selectedThreads=selectedThreads+item.address}) .background(if(selectedThreads.contains(item.address))iBlue.copy(alpha=.10f) else Color.Transparent)){
                 Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
                     if(selectedThreads.contains(item.address))Icon(Icons.Default.CheckCircle,null,tint=iBlue,modifier=Modifier.size(50.dp).padding(12.dp)) else ContactAvatar(ctx,item.address,item.displayName,50)
                     Spacer(Modifier.width(13.dp))

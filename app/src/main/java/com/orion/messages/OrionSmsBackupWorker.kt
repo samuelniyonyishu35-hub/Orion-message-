@@ -82,14 +82,18 @@ class OrionSmsBackupWorker(
 
     override suspend fun doWork() = withContext(Dispatchers.IO) {
         val prefs = applicationContext.getSharedPreferences(OrionBackupScheduler.PREFS, Context.MODE_PRIVATE)
+        val action = inputData.getString("action") ?: "backup"
+        prefs.edit().putString("last_result", if (action == "restore") "Restauration en cours…" else "Sauvegarde en cours…").apply()
         try {
             val mode = inputData.getString("network_mode") ?: OrionBackupScheduler.MODE_WIFI
-            if (!networkAllowed(mode)) return@withContext Result.retry()
+            if (!networkAllowed(mode)) {
+                prefs.edit().putString("last_result", "En attente du réseau autorisé…").apply()
+                return@withContext Result.retry()
+            }
             val user = FirebaseAuth.getInstance().currentUser ?: throw IllegalStateException("Connecte d'abord ton compte Google à ORION.")
             if (ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
                 throw SecurityException("Autorisation de lecture des SMS manquante.")
             }
-            val action = inputData.getString("action") ?: "backup"
             val count = if (action == "restore") restoreSms(user.uid) else backupSms(user.uid)
             val now = System.currentTimeMillis()
             prefs.edit()
@@ -174,9 +178,11 @@ class OrionSmsBackupWorker(
                     put(Telephony.Sms.READ, if (sms.read) 1 else 0)
                     put(Telephony.Sms.SEEN, if (sms.read) 1 else 0)
                 }
-                applicationContext.contentResolver.insert(Telephony.Sms.CONTENT_URI, values)
-                localIds.add(smsId(sms))
-                inserted++
+                val insertedUri = applicationContext.contentResolver.insert(Telephony.Sms.CONTENT_URI, values)
+                if (insertedUri != null) {
+                    localIds.add(smsId(sms))
+                    inserted++
+                }
             }
         }
         return inserted

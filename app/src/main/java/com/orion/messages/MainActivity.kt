@@ -78,6 +78,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.Font
@@ -655,6 +656,7 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
     var editingProfile by remember{mutableStateOf(false)}
     var editName by remember(number){mutableStateOf(customName.ifBlank{item.displayName})}
     var photoVersion by remember(number){mutableIntStateOf(0)}
+    var viewingPhoto by remember{mutableStateOf(false)}
     val photoPicker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->
         if(uri!=null){
             val saved=runCatching{
@@ -669,15 +671,28 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
     val profilePhoto=remember(number,photoVersion){loadContactPhoto(ctx,number)?.asImageBitmap()}
     Column(mod.fillMaxSize().padding(horizontal=18.dp),horizontalAlignment=Alignment.CenterHorizontally){
         Spacer(Modifier.height(24.dp))
-        Box(Modifier.size(108.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Color(0xFF9CC5FF),Color(0xFF3269D6)))),contentAlignment=Alignment.Center){
-            if(profilePhoto!=null) Image(bitmap=profilePhoto,contentDescription="Photo de ${item.displayName}",modifier=Modifier.fillMaxSize(),contentScale=ContentScale.Crop)
+        Box(Modifier.size(108.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Color(0xFF9CC5FF),Color(0xFF3269D6)))).then(if(profilePhoto!=null)Modifier.clickable{viewingPhoto=true}else Modifier),contentAlignment=Alignment.Center){
+            if(profilePhoto!=null) Image(bitmap=profilePhoto,contentDescription="Afficher la photo de ${item.displayName}",modifier=Modifier.fillMaxSize(),contentScale=ContentScale.Crop)
             else Text(item.displayName.take(1).uppercase(),color=Color.White,fontSize=43.sp,fontWeight=FontWeight.Medium)
         }
         Spacer(Modifier.height(12.dp));Text(customName.ifBlank{item.displayName},fontSize=24.sp,fontWeight=FontWeight.Bold,color=ink)
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)){
             ProfileAction("Modifier le profil",Icons.Default.Edit,Modifier.weight(1f),surface,ink){editName=customName.ifBlank{item.displayName};editingProfile=true}
-            ProfileAction("Modifier la photo",Icons.Default.PhotoCamera,Modifier.weight(1f),surface,ink){photoPicker.launch("image/*")}
+            ProfileAction(if(profilePhoto==null)"Ajouter une photo" else "Modifier la photo",Icons.Default.PhotoCamera,Modifier.weight(1f),surface,ink){photoPicker.launch("image/*")}
+        }
+        if(profilePhoto!=null){
+            Row(Modifier.fillMaxWidth().padding(top=8.dp),horizontalArrangement=Arrangement.Center){
+                TextButton(onClick={
+                    val removed=runCatching{contactPhotoFile(ctx,number).delete()}.getOrDefault(false)
+                    photoVersion++
+                    onBlockResult(if(removed)"Photo supprimée. L’avatar ORION par défaut est rétabli." else "Impossible de supprimer la photo.")
+                }){
+                    Icon(Icons.Default.Delete,null,tint=Color(0xFFFF453A))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Supprimer la photo · revenir à l’avatar",color=Color(0xFFFF453A),fontSize=12.sp)
+                }
+            }
         }
         Text(formatInternationalPhone(number),color=muted,fontSize=14.sp)
         Spacer(Modifier.height(22.dp))
@@ -750,6 +765,14 @@ private fun loadContactPhoto(ctx:Context,address:String):android.graphics.Bitmap
             Spacer(Modifier.width(12.dp));Text(if(blocked)"Débloquer ce correspondant" else "Bloquer ce correspondant",color=if(blocked)Color(0xFFFF453A) else ink,fontSize=15.sp)
         }
         Spacer(Modifier.height(8.dp));Text("Le blocage dépend des fonctions de blocage prises en charge par Android sur cet appareil.",fontSize=11.sp,color=muted)
+    }
+    if(viewingPhoto && profilePhoto!=null) Dialog(onDismissRequest={viewingPhoto=false}){
+        Box(Modifier.fillMaxWidth().fillMaxHeight(0.88f).clip(RoundedCornerShape(20.dp)).background(Color.Black),contentAlignment=Alignment.Center){
+            Image(bitmap=profilePhoto,contentDescription="Photo de profil en grand",modifier=Modifier.fillMaxWidth().padding(12.dp),contentScale=ContentScale.Fit)
+            IconButton(onClick={viewingPhoto=false},modifier=Modifier.align(Alignment.TopEnd).padding(8.dp)){
+                Icon(Icons.Default.Close,contentDescription="Fermer",tint=Color.White)
+            }
+        }
     }
     if(editingProfile) AlertDialog(
         onDismissRequest={editingProfile=false},
